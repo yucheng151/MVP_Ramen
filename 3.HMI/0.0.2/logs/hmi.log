@@ -1,0 +1,10 @@
+2026-07-15 13:43:39 INFO [hmi] 心跳回覆：PLC 尚未判定 HMI 在線或已 Timeout
+2026-07-15 13:43:39 INFO [hmi] 心跳正常：PLC Index=2
+2026-07-15 13:43:40 INFO [hmi] 心跳正常：PLC Index=4
+2026-07-15 13:43:40 INFO [hmi] 心跳正常：PLC Index=6
+2026-07-15 13:43:41 INFO [hmi] 心跳正常：PLC Index=8
+2026-07-15 13:43:41 INFO [hmi] 心跳正常：PLC Index=10
+2026-07-15 13:43:42 INFO [hmi] 心跳正常：PLC Index=12
+2026-07-15 13:43:43 INFO [hmi] 已向 PLC 發送測試命令 D1005=1
+2026-07-15 13:43:46 INFO [hmi] 已向 PLC 發送測試命令 D1005=1
+2026-07-15 13:43:46 INFO [hmi] 已向 PLC 發送測試命令 D1005=1

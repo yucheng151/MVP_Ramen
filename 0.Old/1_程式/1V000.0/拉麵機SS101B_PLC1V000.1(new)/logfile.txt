@@ -1,0 +1,3 @@
+1|***|2025-04-18 11:11:30.3688|***|22652|***|1|***|WARN|***|Delta.Diagram.EIP.NetworkView.UserControl_EIP_NetworkView.CheckIsEthernetDriver|***|若要進行通訊，請選擇一個乙太網路類型的 COMMGR 通訊通道 
+2|***|2025-04-18 11:12:00.6649|***|22652|***|1|***|WARN|***|Delta.Diagram.EIP.NetworkView.UserControl_EIP_NetworkView.CheckIsEthernetDriver|***|若要進行通訊，請選擇一個乙太網路類型的 COMMGR 通訊通道 
+1|***|2025-04-18 12:12:12.2945|***|6968|***|1|***|INFO|***|HWCONFIG.Form_Main.SaveUserProject|***|專案存檔成功。\r\n專案目錄：C:\Users\rikken_lin\OneDrive - Softstar\文件\1_拉麵機\SS101B\1_程式\0V000.0\拉麵機SS101B_PLC0V000.0 

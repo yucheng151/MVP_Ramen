@@ -1,0 +1,3 @@
+Class,Identifiers,Address,Type,Initial Value,Comment
+VAR,PC_Order_Buffer,W5000,ARRAY [200] OF INT,,POS機發送訂單參數儲存區
+VAR_RETAIN,int1,W0,INT,1,

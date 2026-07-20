@@ -1,0 +1,1 @@
+1|***|2025-04-22 20:09:35.8062|***|28036|***|1|***|INFO|***|Delta.Diagram.Base.DeviceView.EditAreaPage.HWCONFIG.General.UserControl_DdfGeneral.SimpleButtonExport_Click|***|參數匯出成功。 

@@ -1,0 +1,24 @@
+1|***|2026-07-10 10:26:38.3751|***|30524|***|9|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.OnlineModule|***|COMMGR 在處理請求時發生異常：通訊逾時（無重送） 
+2|***|2026-07-10 10:27:32.7420|***|30524|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：跟裝置的乙太網路連線發生 Socket Error，請確認連線是否正常 
+3|***|2026-07-10 10:28:03.0402|***|30524|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：跟裝置的乙太網路連線發生 Socket Error，請確認連線是否正常 
+1|***|2026-07-10 10:29:46.5539|***|32364|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：欲使用的驅動正在進行修改，請先完成設定後再重試 
+2|***|2026-07-10 10:30:13.6797|***|32364|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：欲使用的驅動正在進行修改，請先完成設定後再重試 
+1|***|2026-07-10 10:30:57.0293|***|18672|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：欲使用的驅動正在進行修改，請先完成設定後再重試 
+2|***|2026-07-10 10:32:34.6956|***|18672|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：跟裝置的乙太網路連線發生 Socket Error，請確認連線是否正常 
+1|***|2026-07-10 10:35:41.0060|***|18912|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：跟裝置的乙太網路連線發生 Socket Error，請確認連線是否正常 
+2|***|2026-07-10 10:35:41.2482|***|18912|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|COMMGR 在處理請求時發生異常：跟裝置的乙太網路連線發生 Socket Error，請確認連線是否正常 
+1|***|2026-07-10 10:39:22.9851|***|16560|***|1|***|WARN|***|DevExpress.XtraBars.Docking2010.Views.Tabbed.TabbedView.RaiseTabMouseActivating|***|請先關閉線上模式再切換到其他分頁。 
+2|***|2026-07-10 10:39:24.0799|***|16560|***|1|***|WARN|***|DevExpress.XtraBars.Docking2010.Views.BaseView.RaiseDocumentClosing|***|請先關閉線上模式再關閉此分頁。 
+3|***|2026-07-10 10:39:38.1009|***|16560|***|1|***|WARN|***|DevExpress.XtraBars.Docking2010.Views.BaseView.RaiseDocumentClosing|***|請先關閉線上模式再關閉此分頁。 
+4|***|2026-07-10 10:40:06.9101|***|16560|***|1|***|WARN|***|Delta.PLC.Network.Operator.NodeOperatorAS.SetModuleDdfVersionWarningText|***|(主機群組, 模組：CPU) AS228T-A: 韌體版本為 01.14.00，部分新增功能無法使用 
+5|***|2026-07-10 10:40:52.2476|***|16560|***|1|***|INFO|***|DevExpress.XtraBars.BarItem.OnClick|***|輸出 / 輸入裝置重新排序已完成 
+6|***|2026-07-10 10:40:58.0024|***|16560|***|1|***|INFO|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.BarButtonClearModule_ItemClick|***|重設配置已完成 
+7|***|2026-07-10 10:41:24.4383|***|16560|***|1|***|WARN|***|Delta.PLC.Network.Operator.NodeOperatorAS.SetModuleDdfVersionWarningText|***|(主機群組, 模組：CPU) AS228T-A: 韌體版本為 01.14.00，部分新增功能無法使用 
+8|***|2026-07-10 10:42:26.3529|***|16560|***|1|***|ERROR|***|Delta.Diagram.AS.DeviceView.UserControl_AS_DeviceView.IsNeedToDownloadBeforeOnline|***|取消 
+9|***|2026-07-10 10:42:37.2636|***|16560|***|1|***|WARN|***|DevExpress.XtraBars.Docking2010.Views.BaseView.RaiseDocumentClosing|***|請先關閉線上模式再關閉此分頁。 
+10|***|2026-07-10 10:42:40.8449|***|16560|***|1|***|WARN|***|DevExpress.XtraBars.Docking2010.Views.BaseView.RaiseDocumentClosing|***|請先關閉線上模式再關閉此分頁。 
+11|***|2026-07-10 10:42:46.0693|***|16560|***|1|***|WARN|***|HWCONFIG.Form_Main.Form_Main_FormClosing|***|線上模式時無法關閉軟體。 
+12|***|2026-07-10 10:42:59.8423|***|16560|***|1|***|INFO|***|HWCONFIG.Form_Main.SaveUserProject|***|專案存檔成功。\r\n專案目錄：C:\Users\Administrator\Desktop\ITRI\MVP拉麵機\1.PLC\MVP_V2_001 
+1|***|2026-07-10 11:49:26.2628|***|19324|***|1|***|WARN|***|HWCONFIG.Form_Main.Form_Main_FormClosing|***|線上模式時無法關閉軟體。 
+2|***|2026-07-10 11:49:28.1966|***|19324|***|1|***|WARN|***|HWCONFIG.Form_Main.Form_Main_FormClosing|***|線上模式時無法關閉軟體。 
+3|***|2026-07-10 11:49:29.4756|***|19324|***|1|***|WARN|***|HWCONFIG.Form_Main.Form_Main_FormClosing|***|線上模式時無法關閉軟體。 

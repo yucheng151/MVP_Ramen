@@ -1,0 +1,7 @@
+1|***|2026-07-15 13:24:56.4888|***|8212|***|1|***|INFO|***|HWCONFIG.Form_Main.SaveUserProject|***|專案存檔成功。\r\n專案目錄：C:\Users\Administrator\Desktop\ITRI\MVP拉麵機\1.PLC\MVP_V2_012 
+2|***|2026-07-15 13:49:05.1269|***|8212|***|22|***|WARN|***|Delta.Diagram.EIP.NetworkView.UserControl_EIP_NetworkView.OnlineModule|***|軟體連線數 (1) 和韌體連線數 (0) 比對不相同。 
+3|***|2026-07-15 13:53:18.4131|***|8212|***|1|***|WARN|***|DevExpress.XtraBars.Docking2010.Views.Tabbed.TabbedView.RaiseTabMouseActivating|***|請先關閉線上模式再切換到其他分頁。 
+4|***|2026-07-15 13:53:59.8010|***|8212|***|1|***|ERROR|***|Delta.Diagram.EIP.NetworkView.UserControl_DeviceParameterPage+UserControl_DeviceParameterPage_VC.Download|***|設備參數: 通訊逾時 
+5|***|2026-07-15 13:54:19.9555|***|8212|***|1|***|WARN|***|DevExpress.XtraBars.Docking2010.Views.BaseView.RaiseDocumentClosing|***|請先關閉線上模式再關閉此分頁。 
+6|***|2026-07-15 15:07:30.4817|***|8212|***|1|***|WARN|***|HWCONFIG.Form_Main.Form_Main_FormClosing|***|線上模式時無法關閉軟體。 
+7|***|2026-07-15 15:07:37.2666|***|8212|***|1|***|INFO|***|HWCONFIG.Form_Main.SaveUserProject|***|專案存檔成功。\r\n專案目錄：C:\Users\Administrator\Desktop\ITRI\MVP拉麵機\1.PLC\MVP_V2_012 

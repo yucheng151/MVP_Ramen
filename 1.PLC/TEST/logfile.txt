@@ -1,0 +1,1 @@
+5|***|2026-07-10 10:04:40.4032|***|24476|***|1|***|INFO|***|HWCONFIG.Form_Main.SaveUserProject|***|專案存檔成功。\r\n專案目錄：C:\Users\Administrator\Desktop\ITRI\MVP拉麵機\1.PLC\TEST 
