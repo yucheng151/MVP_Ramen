@@ -4,6 +4,7 @@ import tkinter as tk
 
 from PIL import Image, ImageEnhance, ImageTk
 
+from register_map import SENSOR_BITS
 from ui_common import BG, PANEL, TEXT, MUTED, GREEN, RED, YELLOW, BLUE, GRAY, button_style, status_color
 
 
@@ -11,12 +12,10 @@ ASSET_PATH = Path(__file__).resolve().parent / "assets" / "machine_overview.png"
 
 # x/y 為圖片內 normalized coordinate，後續可直接微調。
 HOTSPOTS = (
-    {"id": "conveyor", "label": "Conveyor", "x": 0.52, "y": 0.67, "target_page": "ConveyorControlPage"},
+    {"id": "conveyor", "label": "Conveyor", "x": 0.54, "y": 0.57, "target_page": "ConveyorControlPage"},
     {"id": "robot", "label": "Robot", "x": 0.55, "y": 0.27, "target_page": None},
-    {"id": "ipc", "label": "IPC / Controller", "x": 0.18, "y": 0.22, "target_page": "CommunicationPage"},
-    {"id": "bowl_stack", "label": "Bowl Stack", "x": 0.18, "y": 0.46, "target_page": None},
+    {"id": "bowl_stack", "label": "Bowl Stack", "x": 0.03, "y": 0.46, "target_page": None},
     {"id": "ingredient", "label": "Ingredient Area", "x": 0.77, "y": 0.38, "target_page": None},
-    {"id": "communication", "label": "Communication", "x": 0.86, "y": 0.59, "target_page": "CommunicationPage"},
     {"id": "sensor_bowl_drop_confirm", "label": "Bowl Drop", "x": 0.28, "y": 0.50, "target_page": None},
     {"id": "sensor_pause_point_1", "label": "Pause 1", "x": 0.45, "y": 0.50, "target_page": None},
     {"id": "sensor_pause_point_2", "label": "Pause 2", "x": 0.62, "y": 0.50, "target_page": None},
@@ -31,6 +30,7 @@ class MainPage(tk.Frame):
         self._photo = None
         self._resize_job = None
         self._image_box = (0, 0, 1, 1)
+        self._hovered_sensor_id = None
 
         header = tk.Frame(self, bg=BG, height=84)
         header.pack(fill="x", padx=24, pady=(14, 4))
@@ -46,12 +46,12 @@ class MainPage(tk.Frame):
         summary = tk.Frame(header, bg=BG)
         summary.pack(side="right", fill="y")
         summary_actions = {
-            "System": lambda: self.app.show_page("AlarmPage"),
+            "System": lambda: self.app.toggle_page("AlarmPage"),
             "Mode": self.app.toggle_mode,
-            "PLC": lambda: self.app.show_page("CommunicationPage"),
-            "Heartbeat": lambda: self.app.show_page("CommunicationPage"),
+            "PLC": lambda: self.app.toggle_page("CommunicationPage"),
+            "IPC": lambda: self.app.toggle_page("IPCCommunicationPage"),
         }
-        for col, name in enumerate(("System", "Mode", "PLC", "Heartbeat")):
+        for col, name in enumerate(("Mode", "System", "PLC", "IPC")):
             item = tk.Frame(summary, bg=PANEL, width=118, height=58)
             item.grid(row=0, column=col, padx=3, sticky="nsew")
             item.grid_propagate(False)
@@ -107,6 +107,7 @@ class MainPage(tk.Frame):
         self._draw_hotspots()
 
     def _draw_hotspots(self):
+        self.canvas.delete("sensor_tooltip")
         left, top, width, height = self._image_box
         for hotspot in HOTSPOTS:
             x, y = left + hotspot["x"] * width, top + hotspot["y"] * height
@@ -114,23 +115,74 @@ class MainPage(tk.Frame):
             color = status_color(state)
             tag = f"hotspot_{hotspot['id']}"
             is_sensor = hotspot["id"].startswith("sensor_")
-            box_w, box_h = (112, 34) if is_sensor else (142, 48)
+            if is_sensor:
+                color = GREEN if state == "Detected" else GRAY
+                box_w, box_h = 22, 12
+                self.canvas.create_rectangle(
+                    x - box_w / 2, y - box_h / 2, x + box_w / 2, y + box_h / 2,
+                    fill=color, outline="#d7e3e9", width=1,
+                    tags=(tag, "hotspot"),
+                )
+                self.canvas.tag_bind(tag, "<Enter>",
+                                     lambda _event, sensor_id=hotspot["id"]: self._show_sensor_tooltip(sensor_id))
+                self.canvas.tag_bind(tag, "<Leave>", lambda _event: self._hide_sensor_tooltip())
+                if self._hovered_sensor_id == hotspot["id"]:
+                    self._draw_sensor_tooltip(hotspot, state, x, y)
+                continue
+
+            box_w, box_h = 142, 48
             self.canvas.create_rectangle(x - box_w/2, y - box_h/2, x + box_w/2, y + box_h/2,
                                          fill="#111d26", outline=color, width=3 if state == "Alarm" else 1,
                                          tags=(tag, "hotspot"))
-            dot_size = 9 if is_sensor else 12
+            dot_size = 12
             self.canvas.create_oval(x - box_w/2 + 9, y - dot_size/2, x - box_w/2 + 9 + dot_size, y + dot_size/2,
                                     fill=color, outline="", tags=(tag, "hotspot"))
             text_x = x - box_w/2 + 24
-            self.canvas.create_text(text_x, y - (6 if is_sensor else 9), text=hotspot["label"], anchor="w",
-                                    fill=TEXT, font=("Segoe UI", 8 if is_sensor else 10, "bold"), tags=(tag, "hotspot"))
-            self.canvas.create_text(text_x, y + (7 if is_sensor else 10), text=state, anchor="w",
-                                    fill=color, font=("Segoe UI", 7 if is_sensor else 9), tags=(tag, "hotspot"))
+            self.canvas.create_text(text_x, y - 9, text=hotspot["label"], anchor="w",
+                                    fill=TEXT, font=("Segoe UI", 10, "bold"), tags=(tag, "hotspot"))
+            self.canvas.create_text(text_x, y + 10, text=state, anchor="w",
+                                    fill=color, font=("Segoe UI", 9), tags=(tag, "hotspot"))
             target = hotspot["target_page"]
             if target:
                 self.canvas.tag_bind(tag, "<Button-1>", lambda _e, p=target: self.app.show_page(p))
                 self.canvas.tag_bind(tag, "<Enter>", lambda _e: self.canvas.configure(cursor="hand2"))
                 self.canvas.tag_bind(tag, "<Leave>", lambda _e: self.canvas.configure(cursor=""))
+
+    def _show_sensor_tooltip(self, sensor_id):
+        self._hovered_sensor_id = sensor_id
+        self.canvas.delete("sensor_tooltip")
+        hotspot = next(item for item in HOTSPOTS if item["id"] == sensor_id)
+        left, top, width, height = self._image_box
+        x = left + hotspot["x"] * width
+        y = top + hotspot["y"] * height
+        self._draw_sensor_tooltip(hotspot, self._hotspot_state(sensor_id), x, y)
+
+    def _hide_sensor_tooltip(self):
+        self._hovered_sensor_id = None
+        self.canvas.delete("sensor_tooltip")
+
+    def _draw_sensor_tooltip(self, hotspot, state, x, y):
+        sensor_name = hotspot["id"].removeprefix("sensor_")
+        bit = SENSOR_BITS[sensor_name]
+        color = GREEN if state == "Detected" else GRAY
+        box_w, box_h = 132, 40
+        tip_x, tip_y = x, y - 38
+        self.canvas.create_rectangle(
+            tip_x - box_w / 2, tip_y - box_h / 2,
+            tip_x + box_w / 2, tip_y + box_h / 2,
+            fill="#0b141b", outline=color, width=1,
+            tags="sensor_tooltip",
+        )
+        self.canvas.create_text(
+            tip_x - box_w / 2 + 10, tip_y - 9,
+            text=hotspot["label"], anchor="w", fill=TEXT,
+            font=("Segoe UI", 8, "bold"), tags="sensor_tooltip",
+        )
+        self.canvas.create_text(
+            tip_x - box_w / 2 + 10, tip_y + 10,
+            text=f"D1110.{bit}  •  {'ON' if state == 'Detected' else 'OFF'}", anchor="w", fill=color,
+            font=("Segoe UI", 7), tags="sensor_tooltip",
+        )
 
     def _hotspot_state(self, hotspot_id):
         snapshot = self.app.snapshot
@@ -153,7 +205,7 @@ class MainPage(tk.Frame):
         snapshot = self.app.snapshot
         values = {"System": snapshot["system"], "Mode": self.app.machine_mode,
                   "PLC": "Online" if snapshot["online"] else "Offline",
-                  "Heartbeat": "Normal" if snapshot["heartbeat_ok"] else "Timeout"}
+                  "IPC": "Online" if snapshot["ipc_online"] else "Offline"}
         for key, value in values.items():
             self.labels[key].configure(text=value, fg=status_color(value))
         # 狀態更新時只重畫 overlay；尺寸改變則由 Configure 事件重建圖片。

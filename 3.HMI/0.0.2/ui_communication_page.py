@@ -4,7 +4,7 @@ from ui_common import BasePage, PANEL, TEXT, MUTED, status_color
 
 class CommunicationPage(BasePage):
     def __init__(self, parent, app):
-        super().__init__(parent, app, "通訊監控")
+        super().__init__(parent, app, "PLC COMMUNICATION")
         body = tk.Frame(self, bg=PANEL, padx=35, pady=25); body.pack(fill="both", expand=True, padx=70, pady=20)
         self.labels = {}
         for row, name in enumerate(("PLC TCP", "HMI Heartbeat", "PLC Heartbeat Index", "HMI Return Index", "HMI_CommStatus", "Conveyor RTU", "Last read time", "Last write time", "Error code")):

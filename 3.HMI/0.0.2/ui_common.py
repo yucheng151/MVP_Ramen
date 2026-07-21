@@ -16,18 +16,32 @@ class BasePage(tk.Frame):
     def __init__(self, parent, app, title: str):
         super().__init__(parent, bg=BG)
         self.app = app
-        header = tk.Frame(self, bg=BG, height=78)
-        header.pack(fill="x", padx=24, pady=(14, 7))
+        header = tk.Frame(self, bg=BG, height=84)
+        header.pack(fill="x", padx=24, pady=(14, 4))
         header.pack_propagate(False)
-        tk.Label(header, text=title, bg=BG, fg=TEXT,
-                 font=("Microsoft JhengHei UI", 23, "bold")).pack(side="left", fill="y", pady=12)
+        title_frame = tk.Frame(header, bg=BG)
+        title_frame.pack(side="left", fill="y")
+        title_label = tk.Label(title_frame, text=title, bg=BG, fg=TEXT,
+                               font=("Segoe UI", 25, "bold"), cursor="hand2")
+        title_label.pack(anchor="w")
+        back_action = lambda _event: app.show_page("MainPage")
+        title_label.bind("<Button-1>", back_action)
+        subtitle = tk.Button(title_frame, text="← BACK TO HOME", command=lambda: app.show_page("MainPage"),
+                             bg=BG, fg=MUTED, activebackground=BG, activeforeground=TEXT,
+                             relief="flat", bd=0, padx=0, pady=0,
+                             font=("Segoe UI", 10), cursor="hand2")
+        subtitle.pack(anchor="w")
+        for widget in (title_frame, title_label):
+            widget.configure(cursor="hand2")
+            widget.bind("<Button-1>", back_action)
 
         summary = tk.Frame(header, bg=BG)
-        summary.pack(side="right", pady=8)
+        summary.pack(side="right", fill="y")
         cards = (
             ("MODE", "Manual", app.toggle_mode),
-            ("ALM", "--", lambda: app.show_page("AlarmPage")),
-            ("NAVIGATION", "Overview", lambda: app.show_page("MainPage")),
+            ("SYSTEM", "--", lambda: app.toggle_page("AlarmPage")),
+            ("PLC", "--", lambda: app.toggle_page("CommunicationPage")),
+            ("IPC", "--", lambda: app.toggle_page("IPCCommunicationPage")),
         )
         labels = {}
         for column, (caption_text, value_text, action) in enumerate(cards):
@@ -45,14 +59,21 @@ class BasePage(tk.Frame):
                 widget.bind("<Button-1>", lambda _event, callback=action: callback())
             labels[caption_text] = value
         self._mode_button = labels["MODE"]
-        self._alarm_button = labels["ALM"]
+        self._system_button = labels["SYSTEM"]
+        self._plc_button = labels["PLC"]
+        self._ipc_button = labels["IPC"]
 
     def update_global_status(self):
         mode = self.app.machine_mode
-        alarm = bool(self.app.active_alarms)
         self._mode_button.configure(text=mode, fg=status_color(mode))
-        self._alarm_button.configure(text="Alarm" if alarm else "Normal",
-                                     fg=RED if alarm else GREEN)
+        system = self.app.snapshot["system"]
+        self._system_button.configure(text=system, fg=status_color(system))
+        online = self.app.snapshot["online"]
+        self._plc_button.configure(text="Online" if online else "Offline",
+                                   fg=GREEN if online else GRAY)
+        ipc_online = self.app.snapshot["ipc_online"]
+        self._ipc_button.configure(text="Online" if ipc_online else "Offline",
+                                   fg=GREEN if ipc_online else GRAY)
 
     def refresh(self):
         pass

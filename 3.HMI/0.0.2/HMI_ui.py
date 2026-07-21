@@ -16,6 +16,7 @@ from ui_common import BG
 from ui_main_page import MainPage
 from ui_alarm_page import AlarmPage
 from ui_communication_page import CommunicationPage
+from ui_ipc_page import IPCCommunicationPage
 from ui_conveyor_control_page import ConveyorControlPage
 
 
@@ -47,7 +48,7 @@ class HMIUI:
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
         self.pages = {}
-        for page_class in (MainPage, ConveyorControlPage, AlarmPage, CommunicationPage):
+        for page_class in (MainPage, ConveyorControlPage, AlarmPage, CommunicationPage, IPCCommunicationPage):
             page = page_class(container, self)
             self.pages[page_class.__name__] = page
             page.grid(row=0, column=0, sticky="nsew")
@@ -63,6 +64,7 @@ class HMIUI:
                 "hmi_comm": "--", "conveyor": [0] * 8, "parameters": [0] * 5,
                 "conveyor_rtu_online": False, "conveyor_state": "Unknown", "system": "Alarm",
                 "conveyor_timeout_word": 0, "ack_index": "--", "response_code": "--",
+                "ipc_online": False,
                 "sensors": {"bowl_drop_confirm": False, "pause_point_1": False,
                             "pause_point_2": False, "right_stop_point": False}}
 
@@ -70,6 +72,10 @@ class HMIUI:
         self.current_page = name
         self.pages[name].tkraise()
         self.pages[name].refresh()
+
+    def toggle_page(self, name: str) -> None:
+        """第一次開啟指定頁面，再按同一入口時返回首頁。"""
+        self.show_page("MainPage" if self.current_page == name else name)
 
     def show_conveyor_tab(self, tab_name: str) -> None:
         page = self.pages["ConveyorControlPage"]
@@ -142,6 +148,8 @@ class HMIUI:
                     alarms.append("Conveyor Initialize Timeout")
                 if not hb.ok:
                     alarms.append("PLC Communication Timeout")
+                if not plc_status.ok:
+                    alarms.append("PLC Status Read Error")
                 self._update_alarms(alarms)
                 self.snapshot = {
                     "online": True, "heartbeat_ok": hb.ok,
@@ -153,13 +161,14 @@ class HMIUI:
                     "conveyor_state": conveyor_state,
                     "ack_index": plc_status.ack_index if plc_status.ok else "--",
                     "response_code": plc_status.response_code if plc_status.ok else "--",
+                    "ipc_online": self.snapshot.get("ipc_online", False),
                     "sensors": {
                         "bowl_drop_confirm": plc_status.sensors.bowl_drop_confirm,
                         "pause_point_1": plc_status.sensors.pause_point_1,
                         "pause_point_2": plc_status.sensors.pause_point_2,
                         "right_stop_point": plc_status.sensors.right_stop_point,
                     },
-                    "system": "Alarm" if alarms or not plc_status.ok else "Normal",
+                    "system": "Alarm" if alarms else "Normal",
                 }
             self._stop_event.wait(HEARTBEAT_INTERVAL)
 

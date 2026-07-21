@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import messagebox
 
-from register_map import CONVEYOR_SET_SPEED_WRITE, FAULT_NAMES, PARAMETER_LIMITS
+from register_map import CONVEYOR_SET_SPEED_WRITE, FAULT_NAMES, PARAMETER_LIMITS, SENSOR_BITS
 from ui_common import BG, PANEL, PANEL_2, TEXT, MUTED, GREEN, RED, BLUE, GRAY, YELLOW, button_style, status_color
 
 
@@ -29,30 +29,39 @@ class ConveyorControlPage(tk.Frame):
         self.app = app
         self._run_pressed = False
         self._parameter_loaded = False
+        self._sensor_tooltip = None
         self._build_header()
-        self._build_sensor_strip()
         self._build_content()
 
     def _build_header(self):
-        header = tk.Frame(self, bg=BG, height=78)
-        header.pack(fill="x", padx=24, pady=(14, 7))
+        header = tk.Frame(self, bg=BG, height=84)
+        header.pack(fill="x", padx=24, pady=(14, 4))
         header.pack_propagate(False)
         title = tk.Frame(header, bg=BG)
         title.pack(side="left", fill="y")
-        tk.Label(title, text="CONVEYOR CONTROL", bg=BG, fg=TEXT,
-                 font=("Segoe UI", 23, "bold")).pack(anchor="w")
-        tk.Label(title, text="READ • WRITE • HOLD TO RUN • ALM", bg=BG, fg=MUTED,
-                 font=("Segoe UI", 9)).pack(anchor="w")
-        tk.Button(header, text="Back to Overview", command=lambda: self.app.show_page("MainPage"),
-                  **button_style("#314b5d")).pack(side="right", padx=(14, 0), pady=12)
+        title_label = tk.Label(title, text="CONVEYOR CONTROL", bg=BG, fg=TEXT,
+                               font=("Segoe UI", 25, "bold"), cursor="hand2")
+        title_label.pack(anchor="w")
+        back_action = lambda _event: self.app.show_page("MainPage")
+        title_label.bind("<Button-1>", back_action)
+        subtitle = tk.Button(title, text="← BACK TO HOME", command=lambda: self.app.show_page("MainPage"),
+                             bg=BG, fg=MUTED, activebackground=BG, activeforeground=TEXT,
+                             relief="flat", bd=0, padx=0, pady=0,
+                             font=("Segoe UI", 10), cursor="hand2")
+        subtitle.pack(anchor="w")
+        for widget in (title, title_label):
+            widget.configure(cursor="hand2")
+            widget.bind("<Button-1>", back_action)
         self.header_labels = {}
         summary = tk.Frame(header, bg=BG)
-        summary.pack(side="right", pady=8)
+        summary.pack(side="right", fill="y")
         actions = {
             "Mode": self.app.toggle_mode,
-            "ALM": lambda: self.app.show_page("AlarmPage"),
+            "System": lambda: self.app.toggle_page("AlarmPage"),
+            "PLC": lambda: self.app.toggle_page("CommunicationPage"),
+            "IPC": lambda: self.app.toggle_page("IPCCommunicationPage"),
         }
-        for index, name in enumerate(("Conveyor", "Mode", "ALM")):
+        for index, name in enumerate(("Mode", "System", "PLC", "IPC")):
             box = tk.Frame(summary, bg=PANEL, width=118, height=58)
             box.grid(row=0, column=index, padx=3)
             box.grid_propagate(False)
@@ -69,7 +78,9 @@ class ConveyorControlPage(tk.Frame):
                     widget.configure(cursor="hand2")
                     widget.bind("<Button-1>", lambda _event, callback=action: callback())
         self._mode_button = self.header_labels["Mode"]
-        self._alarm_button = self.header_labels["ALM"]
+        self._system_button = self.header_labels["System"]
+        self._plc_button = self.header_labels["PLC"]
+        self._ipc_button = self.header_labels["IPC"]
 
     def _build_content(self):
         content = tk.Frame(self, bg=PANEL_2)
@@ -86,16 +97,44 @@ class ConveyorControlPage(tk.Frame):
     def _build_sensor_strip(self):
         strip = tk.Frame(self, bg="#14212a", highlightbackground="#344957", highlightthickness=1)
         strip.pack(fill="x", padx=24, pady=(0, 6))
-        tk.Label(strip, text="POSITION SENSORS", bg="#14212a", fg=MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side="left", padx=14, pady=7)
         self.sensor_labels = {}
-        sensors = (("bowl_drop_confirm", "Bowl Drop"), ("pause_point_1", "Pause 1"),
-                   ("pause_point_2", "Pause 2"), ("right_stop_point", "Right Stop"))
-        for key, name in sensors:
-            label = tk.Label(strip, text=f"● {name}  OFF", bg="#14212a", fg=GRAY,
-                             font=("Segoe UI", 9, "bold"))
-            label.pack(side="left", expand=True, padx=8)
+        for key in SENSOR_BITS:
+            label = tk.Label(strip, text="", bg=GRAY, width=6, height=1,
+                             relief="solid", bd=1, cursor="hand2")
+            label.pack(side="left", expand=True, padx=20, pady=8)
+            label.bind("<Enter>", lambda event, sensor_key=key: self._show_sensor_tooltip(event, sensor_key))
+            label.bind("<Leave>", self._hide_sensor_tooltip)
             self.sensor_labels[key] = label
+
+    def _show_sensor_tooltip(self, event, key):
+        self._hide_sensor_tooltip()
+        names = {
+            "bowl_drop_confirm": "Bowl Drop Confirm / 落碗確認",
+            "pause_point_1": "Pause Point 1 / 暫停點 1",
+            "pause_point_2": "Pause Point 2 / 暫停點 2",
+            "right_stop_point": "Right Stop Point / 右側停止點",
+        }
+        detected = self.app.snapshot["sensors"].get(key, False)
+        bit = SENSOR_BITS[key]
+        tooltip = tk.Toplevel(self)
+        tooltip.wm_overrideredirect(True)
+        tooltip.wm_geometry(f"+{event.x_root + 12}+{event.y_root + 12}")
+        box = tk.Frame(tooltip, bg="#0b141b",
+                       highlightbackground=GREEN if detected else GRAY,
+                       highlightthickness=1, padx=12, pady=8)
+        box.pack()
+        tk.Label(box, text=names[key], bg="#0b141b", fg=TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        tk.Label(box,
+                 text=f"D1110.{bit}  •  {'Detected / ON' if detected else 'Not Detected / OFF'}",
+                 bg="#0b141b", fg=GREEN if detected else GRAY,
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(3, 0))
+        self._sensor_tooltip = tooltip
+
+    def _hide_sensor_tooltip(self, _event=None):
+        if self._sensor_tooltip is not None:
+            self._sensor_tooltip.destroy()
+            self._sensor_tooltip = None
 
     def _section(self, parent, title, row, column):
         frame = tk.Frame(parent, bg=PANEL, highlightbackground="#344957", highlightthickness=1)
@@ -292,7 +331,6 @@ class ConveyorControlPage(tk.Frame):
         for name, value in values.items():
             self.readback_labels[name].configure(text=str(value))
         conveyor_state = snapshot["conveyor_state"]
-        self.header_labels["Conveyor"].configure(text=conveyor_state, fg=status_color(conveyor_state))
         self.header_labels["Mode"].configure(text=self.app.machine_mode, fg=status_color(self.app.machine_mode))
         manual_enabled = (self.app.machine_mode == "Manual" and snapshot["online"]
                           and snapshot["conveyor_timeout_word"] == 0)
@@ -312,16 +350,14 @@ class ConveyorControlPage(tk.Frame):
                                   fg=RED if alarm else MUTED)
         if not self._parameter_loaded:
             self.load_parameters()
-        for key, label in self.sensor_labels.items():
-            detected = snapshot["sensors"].get(key, False)
-            short_name = {"bowl_drop_confirm": "Bowl Drop", "pause_point_1": "Pause 1",
-                          "pause_point_2": "Pause 2", "right_stop_point": "Right Stop"}[key]
-            label.configure(text=f"● {short_name}  {'Detected / ON' if detected else 'Not Detected / OFF'}",
-                            fg=GREEN if detected else GRAY)
-
     def update_global_status(self):
         mode = self.app.machine_mode
-        alarm = bool(self.app.active_alarms)
         self._mode_button.configure(text=mode, fg=status_color(mode))
-        self._alarm_button.configure(text="Alarm" if alarm else "Normal",
-                                     fg=RED if alarm else GREEN)
+        system = self.app.snapshot["system"]
+        self._system_button.configure(text=system, fg=status_color(system))
+        online = self.app.snapshot["online"]
+        self._plc_button.configure(text="Online" if online else "Offline",
+                                   fg=GREEN if online else GRAY)
+        ipc_online = self.app.snapshot["ipc_online"]
+        self._ipc_button.configure(text="Online" if ipc_online else "Offline",
+                                   fg=GREEN if ipc_online else GRAY)
