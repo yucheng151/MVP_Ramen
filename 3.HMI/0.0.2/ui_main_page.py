@@ -31,6 +31,7 @@ class MainPage(tk.Frame):
         self._resize_job = None
         self._image_box = (0, 0, 1, 1)
         self._hovered_sensor_id = None
+        self._bowl_button_hovered = False
 
         header = tk.Frame(self, bg=BG, height=84)
         header.pack(fill="x", padx=24, pady=(14, 4))
@@ -133,7 +134,7 @@ class MainPage(tk.Frame):
             box_w, box_h = 142, 48
             self.canvas.create_rectangle(x - box_w/2, y - box_h/2, x + box_w/2, y + box_h/2,
                                          fill="#111d26", outline=color, width=3 if state == "Alarm" else 1,
-                                         tags=(tag, "hotspot"))
+                                         tags=(tag, f"{tag}_bg", "hotspot"))
             dot_size = 12
             self.canvas.create_oval(x - box_w/2 + 9, y - dot_size/2, x - box_w/2 + 9 + dot_size, y + dot_size/2,
                                     fill=color, outline="", tags=(tag, "hotspot"))
@@ -147,6 +148,29 @@ class MainPage(tk.Frame):
                 self.canvas.tag_bind(tag, "<Button-1>", lambda _e, p=target: self.app.show_page(p))
                 self.canvas.tag_bind(tag, "<Enter>", lambda _e: self.canvas.configure(cursor="hand2"))
                 self.canvas.tag_bind(tag, "<Leave>", lambda _e: self.canvas.configure(cursor=""))
+            elif (hotspot["id"] == "bowl_stack"
+                  and self.app.machine_mode == "Manual"
+                  and not self.app.snapshot.get("bowl_dispenser_busy", False)):
+                self.canvas.tag_bind(tag, "<Button-1>", self._send_bowl_dispense)
+                self.canvas.tag_bind(tag, "<Enter>", self._bowl_button_enter)
+                self.canvas.tag_bind(tag, "<Leave>", self._bowl_button_leave)
+
+    def _send_bowl_dispense(self, _event=None):
+        """每次 click 僅送出一個 CMD_BOWL_DISPENSE。"""
+        if (self.app.machine_mode != "Manual"
+                or self.app.snapshot.get("bowl_dispenser_busy", False)):
+            return
+        self.app.command.send_bowl_dispense()
+
+    def _bowl_button_enter(self, _event=None):
+        self._bowl_button_hovered = True
+        self.canvas.configure(cursor="hand2")
+        self.canvas.itemconfigure("hotspot_bowl_stack_bg", fill="#315773")
+
+    def _bowl_button_leave(self, _event=None):
+        self._bowl_button_hovered = False
+        self.canvas.configure(cursor="")
+        self.canvas.itemconfigure("hotspot_bowl_stack_bg", fill="#111d26")
 
     def _show_sensor_tooltip(self, sensor_id):
         self._hovered_sensor_id = sensor_id
@@ -197,7 +221,9 @@ class MainPage(tk.Frame):
             return "Future"
         if hotspot_id == "robot":
             return "Future / Reserved"
-        if hotspot_id in ("bowl_stack", "ingredient"):
+        if hotspot_id == "bowl_stack":
+            return "Busy" if snapshot.get("bowl_dispenser_busy", False) else "Ready"
+        if hotspot_id == "ingredient":
             return "Reserved"
         return "Unknown"
 

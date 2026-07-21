@@ -35,6 +35,7 @@ SENSOR_BITS = {
     "pause_point_1": 1,
     "pause_point_2": 2,
     "right_stop_point": 3,
+    "bowl_dispenser_busy": 4,
 }
 
 FAULT_NAMES = (

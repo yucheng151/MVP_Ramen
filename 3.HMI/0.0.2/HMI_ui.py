@@ -65,8 +65,10 @@ class HMIUI:
                 "conveyor_rtu_online": False, "conveyor_state": "Unknown", "system": "Alarm",
                 "conveyor_timeout_word": 0, "ack_index": "--", "response_code": "--",
                 "ipc_online": False,
+                "bowl_dispenser_busy": False,
                 "sensors": {"bowl_drop_confirm": False, "pause_point_1": False,
-                            "pause_point_2": False, "right_stop_point": False}}
+                            "pause_point_2": False, "right_stop_point": False,
+                            "bowl_dispenser_busy": False}}
 
     def show_page(self, name: str) -> None:
         self.current_page = name
@@ -162,11 +164,13 @@ class HMIUI:
                     "ack_index": plc_status.ack_index if plc_status.ok else "--",
                     "response_code": plc_status.response_code if plc_status.ok else "--",
                     "ipc_online": self.snapshot.get("ipc_online", False),
+                    "bowl_dispenser_busy": plc_status.sensors.bowl_dispenser_busy,
                     "sensors": {
                         "bowl_drop_confirm": plc_status.sensors.bowl_drop_confirm,
                         "pause_point_1": plc_status.sensors.pause_point_1,
                         "pause_point_2": plc_status.sensors.pause_point_2,
                         "right_stop_point": plc_status.sensors.right_stop_point,
+                        "bowl_dispenser_busy": plc_status.sensors.bowl_dispenser_busy,
                     },
                     "system": "Alarm" if alarms else "Normal",
                 }
@@ -177,8 +181,10 @@ class HMIUI:
         self.snapshot = {**old, "online": False, "heartbeat_ok": False,
                          "conveyor_rtu_online": False,
                          "conveyor_timeout_word": 0,
+                         "bowl_dispenser_busy": False,
                          "sensors": {"bowl_drop_confirm": False, "pause_point_1": False,
-                                     "pause_point_2": False, "right_stop_point": False},
+                                     "pause_point_2": False, "right_stop_point": False,
+                                     "bowl_dispenser_busy": False},
                          "conveyor_state": "Unknown", "system": "Alarm"}
         self._update_alarms(["PLC Communication Timeout", "Conveyor Driver Offline"])
 

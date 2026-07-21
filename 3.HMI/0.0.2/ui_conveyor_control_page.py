@@ -182,8 +182,11 @@ class ConveyorControlPage(tk.Frame):
             self.parameter_entries[name] = entry
         actions = tk.Frame(frame, bg=PANEL)
         actions.pack(fill="x", padx=16, pady=(4, 12))
-        tk.Button(actions, text="Write Parameters", command=self.write_parameters,
-                  **button_style(BLUE)).pack(fill="x")
+        self.write_parameters_button = tk.Button(
+            actions, text="Write Parameters", command=self.write_parameters,
+            **button_style(BLUE),
+        )
+        self.write_parameters_button.pack(fill="x")
 
     def _build_manual(self, parent):
         frame = self._section(parent, "C. MANUAL RUN", 1, 0)
@@ -246,6 +249,9 @@ class ConveyorControlPage(tk.Frame):
             return None
 
     def _write_values(self, values):
+        if self.app.machine_mode != "Manual":
+            messagebox.showwarning("Manual Mode Required", "Switch to Manual mode before editing parameters.")
+            return False
         if not self.app.snapshot["online"]:
             messagebox.showerror("Error", "PLC Offline")
             return False
@@ -255,6 +261,9 @@ class ConveyorControlPage(tk.Frame):
         return True
 
     def write_parameters(self):
+        if self.app.machine_mode != "Manual":
+            messagebox.showwarning("Manual Mode Required", "Switch to Manual mode before editing parameters.")
+            return
         values = self._validated_parameters()
         if values is None or not messagebox.askyesno("Confirm Write", "確定寫入 D108～D112？"):
             return
@@ -335,6 +344,10 @@ class ConveyorControlPage(tk.Frame):
         manual_enabled = (self.app.machine_mode == "Manual" and snapshot["online"]
                           and snapshot["conveyor_timeout_word"] == 0)
         self.hold_button.configure(state="normal" if manual_enabled else "disabled")
+        parameter_state = "normal" if self.app.machine_mode == "Manual" else "disabled"
+        for entry in self.parameter_entries.values():
+            entry.configure(state=parameter_state)
+        self.write_parameters_button.configure(state=parameter_state)
         word = data[0]
         faults = [name for bit, name in enumerate(FAULT_NAMES) if word & (1 << bit)]
         timeout_word = snapshot["conveyor_timeout_word"]

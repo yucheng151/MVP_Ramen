@@ -27,6 +27,7 @@ CMD_ALARM_RESET = 6
 CMD_CONVEYOR_RUN = 10
 CMD_CONVEYOR_STOP = 11
 CMD_SET_CONVEYOR_SPEED = 12
+CMD_BOWL_DISPENSE = 20
 
 DEFAULT_CONVEYOR_SPEED = 150
 
@@ -146,6 +147,10 @@ class HMICommand:
 
     def send_set_conveyor_speed(self, speed: int) -> HMICommandResult:
         return self.send_command(CMD_SET_CONVEYOR_SPEED, conveyor_speed=speed)
+
+    def send_bowl_dispense(self) -> HMICommandResult:
+        """送出一次落碗命令。"""
+        return self.send_command(CMD_BOWL_DISPENSE, conveyor_speed=0)
 
     def clear_command(self) -> HMICommandResult:
         """清除目前命令，但保留目前的 command_index。"""

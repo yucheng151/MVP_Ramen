@@ -30,6 +30,7 @@ class HMISensorStatus:
     pause_point_1: bool = False
     pause_point_2: bool = False
     right_stop_point: bool = False
+    bowl_dispenser_busy: bool = False
 
 
 @dataclass
