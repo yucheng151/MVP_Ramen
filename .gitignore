@@ -1,0 +1,12 @@
+# Installer packages are kept locally and are not versioned.
+0.Old/3_install/*.exe
+
+# Python generated files and environments.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime logs.
+logs/
+*.log
