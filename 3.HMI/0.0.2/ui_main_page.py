@@ -13,7 +13,7 @@ ASSET_PATH = Path(__file__).resolve().parent / "assets" / "machine_overview.png"
 # x/y 為圖片內 normalized coordinate，後續可直接微調。
 HOTSPOTS = (
     {"id": "conveyor", "label": "Conveyor", "x": 0.54, "y": 0.57, "target_page": "ConveyorControlPage"},
-    {"id": "robot", "label": "Robot", "x": 0.55, "y": 0.27, "target_page": None},
+    {"id": "robot", "label": "Robot", "x": 0.55, "y": 0.27, "target_page": "RobotPage"},
     {"id": "bowl_stack", "label": "Bowl Stack", "x": 0.03, "y": 0.46, "target_page": None},
     {"id": "ingredient", "label": "Ingredient Area", "x": 0.77, "y": 0.38, "target_page": None},
     {"id": "sensor_bowl_drop_confirm", "label": "Bowl Drop", "x": 0.28, "y": 0.50, "target_page": None},
@@ -220,7 +220,10 @@ class MainPage(tk.Frame):
         if hotspot_id == "ipc":
             return "Future"
         if hotspot_id == "robot":
-            return "Future / Reserved"
+            arm_online = snapshot.get("arm_online")
+            if arm_online is None:
+                return "Unknown"
+            return "Online" if arm_online else "Offline"
         if hotspot_id == "bowl_stack":
             return "Busy" if snapshot.get("bowl_dispenser_busy", False) else "Ready"
         if hotspot_id == "ingredient":

@@ -17,6 +17,7 @@ from ui_main_page import MainPage
 from ui_alarm_page import AlarmPage
 from ui_communication_page import CommunicationPage
 from ui_ipc_page import IPCCommunicationPage
+from ui_robot_page import RobotPage
 from ui_conveyor_control_page import ConveyorControlPage
 
 
@@ -48,7 +49,14 @@ class HMIUI:
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
         self.pages = {}
-        for page_class in (MainPage, ConveyorControlPage, AlarmPage, CommunicationPage, IPCCommunicationPage):
+        for page_class in (
+            MainPage,
+            ConveyorControlPage,
+            AlarmPage,
+            CommunicationPage,
+            IPCCommunicationPage,
+            RobotPage,
+        ):
             page = page_class(container, self)
             self.pages[page_class.__name__] = page
             page.grid(row=0, column=0, sticky="nsew")
@@ -65,6 +73,7 @@ class HMIUI:
                 "conveyor_rtu_online": False, "conveyor_state": "Unknown", "system": "Alarm",
                 "conveyor_timeout_word": 0, "ack_index": "--", "response_code": "--",
                 "ipc_online": False,
+                "arm_online": None,
                 "bowl_dispenser_busy": False,
                 "sensors": {"bowl_drop_confirm": False, "pause_point_1": False,
                             "pause_point_2": False, "right_stop_point": False,
@@ -164,6 +173,7 @@ class HMIUI:
                     "ack_index": plc_status.ack_index if plc_status.ok else "--",
                     "response_code": plc_status.response_code if plc_status.ok else "--",
                     "ipc_online": self.snapshot.get("ipc_online", False),
+                    "arm_online": self.snapshot.get("arm_online"),
                     "bowl_dispenser_busy": plc_status.sensors.bowl_dispenser_busy,
                     "sensors": {
                         "bowl_drop_confirm": plc_status.sensors.bowl_drop_confirm,
