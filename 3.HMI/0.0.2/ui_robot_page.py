@@ -1,7 +1,7 @@
 """Robot arm communication and status page."""
 import tkinter as tk
 
-from ui_common import BasePage, PANEL, TEXT, MUTED, status_color
+from ui_common import BasePage, PANEL, TEXT, MUTED, BLUE, GREEN, button_style, status_color
 
 
 class RobotPage(BasePage):
@@ -40,6 +40,30 @@ class RobotPage(BasePage):
 
         body.grid_columnconfigure(0, weight=1)
         body.grid_columnconfigure(1, weight=2)
+
+        actions = tk.Frame(self, bg=PANEL)
+        actions.pack(fill="x", padx=24, pady=(0, 18))
+
+        tk.Label(
+            actions,
+            text="手臂操作（尚未綁定 PLC）",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 13),
+        ).pack(anchor="w", padx=28, pady=(18, 10))
+
+        buttons = tk.Frame(actions, bg=PANEL)
+        buttons.pack(fill="x", padx=28, pady=(0, 20))
+        tk.Button(
+            buttons,
+            text="甩麵",
+            **button_style(BLUE),
+        ).pack(side="left", fill="x", expand=True, padx=(0, 8))
+        tk.Button(
+            buttons,
+            text="煮麵",
+            **button_style(GREEN),
+        ).pack(side="left", fill="x", expand=True, padx=(8, 0))
 
     def refresh(self):
         online = self.app.snapshot.get("arm_online")
