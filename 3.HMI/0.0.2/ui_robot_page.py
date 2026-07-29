@@ -282,6 +282,7 @@ class RobotPage(BasePage):
 
     def _robot_interlock_reasons(self):
         snapshot = self.app.snapshot
+        robot = snapshot.get("robot")
         manual_reply = snapshot.get("robot_manual")
         reasons = []
         if not snapshot.get("online"):
@@ -290,6 +291,8 @@ class RobotPage(BasePage):
             reasons.append("Heartbeat timeout")
         if self.app.machine_mode != "Manual":
             reasons.append("Please switch to Manual Mode")
+        if robot is None or not robot.read_ok or not robot.status_output:
+            reasons.append("Robot is Offline")
         if manual_reply is None or not manual_reply.read_ok:
             reasons.append("Robot manual status communication is offline")
         if (
@@ -365,6 +368,12 @@ class RobotPage(BasePage):
         if not snapshot.get("heartbeat_ok"):
             self._finish_robot_command(
                 "Error", "Robot command failed: Heartbeat Timeout", error=True
+            )
+            return
+        robot = snapshot.get("robot")
+        if robot is None or not robot.read_ok or not robot.status_output:
+            self._finish_robot_command(
+                "Error", "Robot command failed: Robot Offline", error=True
             )
             return
         if (
