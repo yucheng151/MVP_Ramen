@@ -10,6 +10,14 @@ if not exist "%~dp0logs" mkdir "%~dp0logs"
 
 echo [%date% %time%] Checking GitHub for HMI updates...>>"%LOG%"
 
+if exist "%~dp0ipc_auto_update_hidden.vbs" if not exist "%~dp0logs\.hidden_task_installed" (
+    schtasks /Create /TN "MVP Ramen HMI Auto Update" /TR "\"%SystemRoot%\System32\wscript.exe\" \"%~dp0ipc_auto_update_hidden.vbs\"" /SC MINUTE /MO 1 /F >>"%LOG%" 2>&1
+    if not errorlevel 1 (
+        echo installed>"%~dp0logs\.hidden_task_installed"
+        echo [%date% %time%] Automatic update task changed to hidden mode.>>"%LOG%"
+    )
+)
+
 if not exist "%GIT%" (
     echo [%date% %time%] ERROR: Git is not installed.>>"%LOG%"
     exit /b 1

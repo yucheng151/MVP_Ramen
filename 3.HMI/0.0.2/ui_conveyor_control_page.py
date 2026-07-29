@@ -3,7 +3,10 @@ import tkinter as tk
 from tkinter import messagebox
 
 from register_map import CONVEYOR_SET_SPEED_WRITE, FAULT_NAMES, PARAMETER_LIMITS, SENSOR_BITS
-from ui_common import BG, PANEL, PANEL_2, TEXT, MUTED, GREEN, RED, BLUE, GRAY, YELLOW, button_style, status_color
+from ui_common import (
+    BG, PANEL, PANEL_2, TEXT, MUTED, GREEN, RED, BLUE, GRAY, YELLOW,
+    button_style,
+)
 
 
 READBACK_FIELDS = (
@@ -15,6 +18,8 @@ READBACK_FIELDS = (
     ("Bus Current Setting", "-", "D106", 6),
     ("Phase Current Setting", "-", "D107", 7),
 )
+
+STOP_RETRY_INTERVAL_MS = 350
 
 
 class ConveyorControlPage(tk.Frame):
@@ -32,59 +37,30 @@ class ConveyorControlPage(tk.Frame):
         self._sensor_tooltip = None
         self._build_header()
         self._build_content()
+        self.after(STOP_RETRY_INTERVAL_MS, self._enforce_stop_until_zero)
 
     def _build_header(self):
-        header = tk.Frame(self, bg=BG, height=84)
+        from ui_main_page import MainControlPanel, SideNavigation
+
+        header = tk.Frame(self, bg=BG, height=100)
         header.pack(fill="x", padx=24, pady=(14, 4))
         header.pack_propagate(False)
         title = tk.Frame(header, bg=BG)
         title.pack(side="left", fill="y")
         title_label = tk.Label(title, text="CONVEYOR CONTROL", bg=BG, fg=TEXT,
-                               font=("Segoe UI", 25, "bold"), cursor="hand2")
+                               font=("Segoe UI", 25, "bold"))
         title_label.pack(anchor="w")
-        back_action = lambda _event: self.app.show_page("MainPage")
-        title_label.bind("<Button-1>", back_action)
-        subtitle = tk.Button(title, text="← BACK TO HOME", command=lambda: self.app.show_page("MainPage"),
-                             bg=BG, fg=MUTED, activebackground=BG, activeforeground=TEXT,
-                             relief="flat", bd=0, padx=0, pady=0,
-                             font=("Segoe UI", 10), cursor="hand2")
+        subtitle = tk.Label(title, text="SELECT PAGE FROM LEFT MENU",
+                            bg=BG, fg=MUTED, font=("Segoe UI", 10))
         subtitle.pack(anchor="w")
-        for widget in (title, title_label):
-            widget.configure(cursor="hand2")
-            widget.bind("<Button-1>", back_action)
-        self.header_labels = {}
-        summary = tk.Frame(header, bg=BG)
-        summary.pack(side="right", fill="y")
-        actions = {
-            "Mode": self.app.toggle_mode,
-            "System": lambda: self.app.toggle_page("AlarmPage"),
-            "PLC": lambda: self.app.toggle_page("CommunicationPage"),
-            "IPC": lambda: self.app.toggle_page("IPCCommunicationPage"),
-        }
-        for index, name in enumerate(("Mode", "System", "PLC", "IPC")):
-            box = tk.Frame(summary, bg=PANEL, width=118, height=58)
-            box.grid(row=0, column=index, padx=3)
-            box.grid_propagate(False)
-            caption = tk.Label(box, text=name.upper(), bg=PANEL, fg=MUTED,
-                               font=("Segoe UI", 8), anchor="w")
-            caption.pack(fill="x", padx=12, pady=(6, 0))
-            label = tk.Label(box, text="--", width=10, bg=PANEL, fg=TEXT,
-                             font=("Segoe UI", 13, "bold"), anchor="w")
-            label.pack(fill="x", padx=12)
-            self.header_labels[name] = label
-            if name in actions:
-                action = actions[name]
-                for widget in (box, caption, label):
-                    widget.configure(cursor="hand2")
-                    widget.bind("<Button-1>", lambda _event, callback=action: callback())
-        self._mode_button = self.header_labels["Mode"]
-        self._system_button = self.header_labels["System"]
-        self._plc_button = self.header_labels["PLC"]
-        self._ipc_button = self.header_labels["IPC"]
+        self._global_controls = MainControlPanel(header, self.app)
+        self._global_controls.pack(side="right", fill="y")
+        self._side_nav = SideNavigation(self, self.app)
+        self._side_nav.pack(side="left", fill="y", padx=(24, 6), pady=(6, 12))
 
     def _build_content(self):
         content = tk.Frame(self, bg=PANEL_2)
-        content.pack(fill="both", expand=True, padx=24, pady=(0, 18))
+        content.pack(fill="both", expand=True, padx=(0, 24), pady=(0, 18))
         content.grid_columnconfigure(0, weight=1, uniform="column")
         content.grid_columnconfigure(1, weight=1, uniform="column")
         content.grid_rowconfigure(0, weight=3)
@@ -205,19 +181,39 @@ class ConveyorControlPage(tk.Frame):
     def _build_alarm(self, parent):
         frame = self._section(parent, "D. ALM STATUS", 1, 1)
         body = tk.Frame(frame, bg=PANEL)
-        body.pack(fill="both", expand=True, padx=22, pady=(0, 14))
-        self.alm_lamp = tk.Label(body, text="●", bg=PANEL, fg=GREEN, font=("Segoe UI", 34, "bold"))
-        self.alm_lamp.pack(side="left", padx=(5, 15))
-        info = tk.Frame(body, bg=PANEL)
-        info.pack(side="left", fill="both", expand=True)
+        body.pack(fill="both", expand=True, padx=16, pady=(0, 10))
+        summary = tk.Frame(body, bg=PANEL)
+        summary.pack(fill="x")
+        self.alm_lamp = tk.Label(summary, text="●", bg=PANEL, fg=GREEN,
+                                 font=("Segoe UI", 25, "bold"))
+        self.alm_lamp.pack(side="left", padx=(2, 10))
+        info = tk.Frame(summary, bg=PANEL)
+        info.pack(side="left", fill="x", expand=True)
         self.alm_status = tk.Label(info, text="ALM: Normal", bg=PANEL, fg=GREEN,
-                                   font=("Segoe UI", 21, "bold"))
-        self.alm_status.pack(anchor="w", pady=(6, 2))
+                                   font=("Segoe UI", 17, "bold"))
+        self.alm_status.pack(anchor="w")
         self.alm_reason = tk.Label(info, text="No active fault", bg=PANEL, fg=MUTED,
-                                   font=("Segoe UI", 11))
+                                   font=("Segoe UI", 9))
         self.alm_reason.pack(anchor="w")
-        tk.Button(body, text="Fault Detail", command=self.show_fault_detail,
-                  **button_style("#425766")).pack(side="right", padx=5)
+
+        fault_grid = tk.Frame(body, bg="#15232d", highlightbackground="#344957",
+                              highlightthickness=1)
+        fault_grid.pack(fill="both", expand=True, pady=(5, 0))
+        for column in range(3):
+            fault_grid.grid_columnconfigure(column, weight=1, uniform="fault")
+        fault_names = tuple(FAULT_NAMES) + (
+            "Communication Timeout",
+            "Initialize Timeout",
+        )
+        self.fault_status_labels = {}
+        for index, name in enumerate(fault_names):
+            row, column = divmod(index, 3)
+            label = tk.Label(
+                fault_grid, text=f"●  {name}", bg="#15232d", fg=MUTED,
+                anchor="w", padx=7, pady=3, font=("Segoe UI", 8, "bold"),
+            )
+            label.grid(row=row, column=column, sticky="nsew", padx=1, pady=1)
+            self.fault_status_labels[name] = label
 
     def select_tab(self, name):
         """相容既有主頁入口；本頁已沒有分頁。"""
@@ -303,7 +299,7 @@ class ConveyorControlPage(tk.Frame):
     def _hold_stop(self, _event=None):
         if not self._run_pressed:
             return
-        # ButtonRelease 只處理一次，並送出一次 Stop 命令。
+        # ButtonRelease 先送一次 Stop；背景循環會重送到 D101 歸零。
         self._run_pressed = False
         self.stop_conveyor()
 
@@ -317,6 +313,37 @@ class ConveyorControlPage(tk.Frame):
             self.app.set_conveyor_run_requested(False)
         self.manual_message.configure(text="STOPPED" if result.ok else result.message,
                                       fg=GREEN if result.ok else RED)
+
+    def _enforce_stop_until_zero(self):
+        """Manual hold-to-run safety: repeat CMD 11 until D101 reaches zero."""
+        try:
+            snapshot = self.app.snapshot
+            actual_speed = snapshot["conveyor"][1]
+            should_stop = (
+                not self._run_pressed
+                and self.app.machine_mode == "Manual"
+                and snapshot["online"]
+                and actual_speed != 0
+            )
+            if should_stop:
+                result = self.app.command.send_conveyor_stop()
+                if result.ok:
+                    self.app.set_conveyor_run_requested(False)
+                    self.manual_message.configure(
+                        text=f"STOPPING — D101: {actual_speed} RPM",
+                        fg=YELLOW,
+                    )
+                else:
+                    self.manual_message.configure(text=result.message, fg=RED)
+            elif (
+                not self._run_pressed
+                and self.app.machine_mode == "Manual"
+                and snapshot["online"]
+                and actual_speed == 0
+            ):
+                self.manual_message.configure(text="STOPPED — D101: 0 RPM", fg=GREEN)
+        finally:
+            self.after(STOP_RETRY_INTERVAL_MS, self._enforce_stop_until_zero)
 
     def show_fault_detail(self):
         word = self.app.snapshot["conveyor"][0]
@@ -340,7 +367,8 @@ class ConveyorControlPage(tk.Frame):
         for name, value in values.items():
             self.readback_labels[name].configure(text=str(value))
         conveyor_state = snapshot["conveyor_state"]
-        self.header_labels["Mode"].configure(text=self.app.machine_mode, fg=status_color(self.app.machine_mode))
+        self._global_controls.refresh()
+        self._side_nav.refresh()
         manual_enabled = (self.app.machine_mode == "Manual" and snapshot["online"]
                           and snapshot["conveyor_timeout_word"] == 0)
         self.hold_button.configure(state="normal" if manual_enabled else "disabled")
@@ -355,6 +383,19 @@ class ConveyorControlPage(tk.Frame):
             faults.append("Conveyor Communication Timeout")
         if timeout_word & 0x0002:
             faults.append("Conveyor Initialize Timeout")
+        active_faults = {
+            name for bit, name in enumerate(FAULT_NAMES) if word & (1 << bit)
+        }
+        if timeout_word & 0x0001:
+            active_faults.add("Communication Timeout")
+        if timeout_word & 0x0002:
+            active_faults.add("Initialize Timeout")
+        for name, label in self.fault_status_labels.items():
+            active = name in active_faults
+            label.configure(
+                fg=RED if active else MUTED,
+                bg="#4a1f27" if active else "#15232d",
+            )
         alarm = bool(faults)
         color = RED if alarm else GREEN
         self.alm_lamp.configure(fg=color)
@@ -364,13 +405,5 @@ class ConveyorControlPage(tk.Frame):
         if not self._parameter_loaded:
             self.load_parameters()
     def update_global_status(self):
-        mode = self.app.machine_mode
-        self._mode_button.configure(text=mode, fg=status_color(mode))
-        system = self.app.snapshot["system"]
-        self._system_button.configure(text=system, fg=status_color(system))
-        online = self.app.snapshot["online"]
-        self._plc_button.configure(text="Online" if online else "Offline",
-                                   fg=GREEN if online else GRAY)
-        ipc_online = self.app.snapshot["ipc_online"]
-        self._ipc_button.configure(text="Online" if ipc_online else "Offline",
-                                   fg=GREEN if ipc_online else GRAY)
+        self._global_controls.refresh()
+        self._side_nav.refresh()

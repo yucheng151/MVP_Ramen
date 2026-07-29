@@ -1,3 +1,4 @@
+from pathlib import Path
 import tkinter as tk
 
 BG = "#101820"
@@ -12,68 +13,105 @@ BLUE = "#3399ff"
 GRAY = "#667784"
 
 
+class EmergencyStopButton(tk.Button):
+    """Shared E-stop control with immediate press/release visual feedback."""
+
+    _instances = []
+
+    def __init__(self, parent, command):
+        asset_dir = Path(__file__).resolve().parent / "assets"
+        self._normal_image = tk.PhotoImage(file=str(asset_dir / "emergency_stop.png"))
+        self._pressed_image = tk.PhotoImage(file=str(asset_dir / "emergency_stop_pressed.png"))
+        self._external_command = command
+        self._latched = False
+        self._flash_on = False
+        self._flash_job = None
+        super().__init__(
+            parent,
+            image=self._normal_image,
+            command=self._toggle_latched,
+            bg=BG,
+            activebackground="#401010",
+            width=78,
+            height=78,
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            cursor="hand2",
+        )
+        self.bind("<ButtonPress-1>", self._show_pressed, add="+")
+        self.bind("<ButtonRelease-1>", self._show_released, add="+")
+        self.bind("<Leave>", self._show_released, add="+")
+        self._instances.append(self)
+
+    def _show_pressed(self, _event=None):
+        self.configure(image=self._pressed_image, bg="#401010", relief="sunken")
+
+    def _show_released(self, _event=None):
+        self.after(140, self._restore_if_unlatched)
+
+    def _restore_if_unlatched(self):
+        if not self._latched:
+            self.configure(image=self._normal_image, bg=BG, relief="flat")
+
+    def _toggle_latched(self):
+        new_state = not self._latched
+        for button in tuple(self._instances):
+            if button.winfo_exists():
+                button._set_latched(new_state)
+        self._external_command()
+
+    def _set_latched(self, latched):
+        self._latched = latched
+        if latched:
+            self._flash_on = True
+            self._flash()
+        else:
+            if self._flash_job is not None:
+                self.after_cancel(self._flash_job)
+                self._flash_job = None
+            self._flash_on = False
+            self.configure(image=self._normal_image, bg=BG, relief="flat")
+
+    def _flash(self):
+        if not self._latched:
+            return
+        if self._flash_on:
+            self.configure(image=self._pressed_image, bg="#7a1010", relief="sunken")
+        else:
+            self.configure(image=self._pressed_image, bg="#260606", relief="sunken")
+        self._flash_on = not self._flash_on
+        self._flash_job = self.after(420, self._flash)
+
+
 class BasePage(tk.Frame):
     def __init__(self, parent, app, title: str):
         super().__init__(parent, bg=BG)
         self.app = app
-        header = tk.Frame(self, bg=BG, height=84)
+        # Lazy import avoids a module cycle while keeping one shared visual system.
+        from ui_main_page import MainControlPanel, SideNavigation
+
+        header = tk.Frame(self, bg=BG, height=100)
         header.pack(fill="x", padx=24, pady=(14, 4))
         header.pack_propagate(False)
         title_frame = tk.Frame(header, bg=BG)
         title_frame.pack(side="left", fill="y")
         title_label = tk.Label(title_frame, text=title, bg=BG, fg=TEXT,
-                               font=("Segoe UI", 25, "bold"), cursor="hand2")
+                               font=("Segoe UI", 25, "bold"))
         title_label.pack(anchor="w")
-        back_action = lambda _event: app.show_page("MainPage")
-        title_label.bind("<Button-1>", back_action)
-        subtitle = tk.Button(title_frame, text="← BACK TO HOME", command=lambda: app.show_page("MainPage"),
-                             bg=BG, fg=MUTED, activebackground=BG, activeforeground=TEXT,
-                             relief="flat", bd=0, padx=0, pady=0,
-                             font=("Segoe UI", 10), cursor="hand2")
-        subtitle.pack(anchor="w")
-        for widget in (title_frame, title_label):
-            widget.configure(cursor="hand2")
-            widget.bind("<Button-1>", back_action)
+        tk.Label(
+            title_frame, text="SELECT PAGE FROM LEFT MENU",
+            bg=BG, fg=MUTED, font=("Segoe UI", 10),
+        ).pack(anchor="w")
 
-        summary = tk.Frame(header, bg=BG)
-        summary.pack(side="right", fill="y")
-        cards = (
-            ("MODE", "Manual", app.toggle_mode),
-            ("SYSTEM", "--", lambda: app.toggle_page("AlarmPage")),
-            ("PLC", "--", lambda: app.toggle_page("CommunicationPage")),
-            ("IPC", "--", lambda: app.toggle_page("IPCCommunicationPage")),
-        )
-        labels = {}
-        for column, (caption_text, value_text, action) in enumerate(cards):
-            box = tk.Frame(summary, bg=PANEL, width=118, height=58)
-            box.grid(row=0, column=column, padx=3)
-            box.grid_propagate(False)
-            caption = tk.Label(box, text=caption_text, bg=PANEL, fg=MUTED,
-                               font=("Segoe UI", 8), anchor="w", cursor="hand2")
-            caption.pack(fill="x", padx=12, pady=(6, 0))
-            value = tk.Label(box, text=value_text, width=10, bg=PANEL, fg=TEXT,
-                             font=("Segoe UI", 13, "bold"), anchor="w", cursor="hand2")
-            value.pack(fill="x", padx=12)
-            for widget in (box, caption, value):
-                widget.configure(cursor="hand2")
-                widget.bind("<Button-1>", lambda _event, callback=action: callback())
-            labels[caption_text] = value
-        self._mode_button = labels["MODE"]
-        self._system_button = labels["SYSTEM"]
-        self._plc_button = labels["PLC"]
-        self._ipc_button = labels["IPC"]
+        self._global_controls = MainControlPanel(header, app)
+        self._global_controls.pack(side="right")
+        self._side_nav = SideNavigation(self, app)
+        self._side_nav.pack(side="left", fill="y", padx=(24, 6), pady=(6, 12))
 
     def update_global_status(self):
-        mode = self.app.machine_mode
-        self._mode_button.configure(text=mode, fg=status_color(mode))
-        system = self.app.snapshot["system"]
-        self._system_button.configure(text=system, fg=status_color(system))
-        online = self.app.snapshot["online"]
-        self._plc_button.configure(text="Online" if online else "Offline",
-                                   fg=GREEN if online else GRAY)
-        ipc_online = self.app.snapshot["ipc_online"]
-        self._ipc_button.configure(text="Online" if ipc_online else "Offline",
-                                   fg=GREEN if ipc_online else GRAY)
+        self._global_controls.refresh()
+        self._side_nav.refresh()
 
     def refresh(self):
         pass
@@ -88,7 +126,7 @@ def button_style(color=BLUE):
 def status_color(value: str):
     return {
         "Normal": GREEN, "Ready": GREEN, "Online": GREEN, "Auto": GREEN,
-        "Running": BLUE, "Manual": YELLOW, "Warning": YELLOW, "Busy": YELLOW,
+        "Running": BLUE, "Stopping": YELLOW, "Manual": YELLOW, "Warning": YELLOW, "Busy": YELLOW,
         "Alarm": RED, "Timeout": RED, "Jam": RED, "Empty": RED,
         "Driver Offline": RED, "Low Material": YELLOW,
         "Offline": GRAY, "Unknown": GRAY, "Stop": GRAY,

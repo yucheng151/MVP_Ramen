@@ -10,7 +10,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 from HMI_plc_client import HMIPlcClient
-from register_map import HMI_CMD_CODE, HMI_CMD_INDEX, HMI_CMD_VALID, HMI_CONVEYOR_SPEED
+from register_map import (
+    HMI_CMD_CODE,
+    HMI_CMD_INDEX,
+    HMI_CMD_VALID,
+    HMI_CONVEYOR_SPEED,
+    HMI_ROBOT_ACTION_NO,
+)
 
 
 # =====================================================
@@ -28,6 +34,7 @@ CMD_CONVEYOR_RUN = 10
 CMD_CONVEYOR_STOP = 11
 CMD_SET_CONVEYOR_SPEED = 12
 CMD_BOWL_DISPENSE = 20
+CMD_ROBOT_MANUAL_EXECUTE = 40
 
 DEFAULT_CONVEYOR_SPEED = 150
 
@@ -151,6 +158,75 @@ class HMICommand:
     def send_bowl_dispense(self) -> HMICommandResult:
         """送出一次落碗命令。"""
         return self.send_command(CMD_BOWL_DISPENSE, conveyor_speed=0)
+
+    def send_robot_manual(
+        self,
+        action_no: int,
+        noodle_cabinet_no: int,
+        cut_no: int,
+        output_cabinet_no: int,
+    ) -> HMICommandResult:
+        """Write D1010~D1013, then issue Robot Manual Execute (CMD 40)."""
+        valid = (
+            action_no == 1
+            and 1 <= noodle_cabinet_no <= 10
+            and 1 <= cut_no <= 6
+            and 1 <= output_cabinet_no <= 2
+        ) or (
+            action_no == 2
+            and noodle_cabinet_no == 0
+            and 1 <= cut_no <= 6
+            and output_cabinet_no == 0
+        )
+        if not valid:
+            self.last_error = "Robot 單動參數超出允許範圍"
+            return HMICommandResult(
+                False, CMD_ROBOT_MANUAL_EXECUTE, self.last_command_index, 0,
+                self.last_error,
+            )
+        if not self.plc.connected:
+            self.last_error = "尚未連線 PLC"
+            return HMICommandResult(
+                False, CMD_ROBOT_MANUAL_EXECUTE, self.last_command_index, 0,
+                self.last_error,
+            )
+
+        command_index = self.next_command_index()
+        parameters = [action_no, noodle_cabinet_no, cut_no, output_cabinet_no]
+        with self.plc.lock:
+            if not self.write_d_block(HMI_ROBOT_ACTION_NO, parameters):
+                return HMICommandResult(
+                    False, CMD_ROBOT_MANUAL_EXECUTE, command_index, 0,
+                    self.last_error or "寫入 Robot 單動參數失敗",
+                )
+            if not self.write_d(D_HMI_TO_PLC_CMD_INDEX, command_index):
+                return HMICommandResult(
+                    False, CMD_ROBOT_MANUAL_EXECUTE, command_index, 0,
+                    self.last_error or "寫入 Robot 命令序號失敗",
+                )
+            if not self.write_d(D_HMI_TO_PLC_CMD_CODE, CMD_ROBOT_MANUAL_EXECUTE):
+                return HMICommandResult(
+                    False, CMD_ROBOT_MANUAL_EXECUTE, command_index, 0,
+                    self.last_error or "寫入 Robot 命令碼失敗",
+                )
+            if not self.write_d(D_HMI_TO_PLC_CMD_VALID, 1):
+                return HMICommandResult(
+                    False, CMD_ROBOT_MANUAL_EXECUTE, command_index, 0,
+                    self.last_error or "打開 Robot 命令有效位失敗",
+                )
+        return HMICommandResult(
+            True, CMD_ROBOT_MANUAL_EXECUTE, command_index, 0, "OK",
+        )
+
+    def clear_robot_manual_command(self) -> bool:
+        """Clear D1002 then D1000 after Robot manual completion/failure."""
+        if not self.plc.connected:
+            self.last_error = "尚未連線 PLC"
+            return False
+        with self.plc.lock:
+            if not self.write_d(D_HMI_TO_PLC_CMD_VALID, 0):
+                return False
+            return self.write_d(D_HMI_TO_PLC_CMD_CODE, CMD_NONE)
 
     def clear_command(self) -> HMICommandResult:
         """清除目前命令，但保留目前的 command_index。"""

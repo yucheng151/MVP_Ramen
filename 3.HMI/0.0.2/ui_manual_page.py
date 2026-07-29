@@ -51,4 +51,4 @@ class ManualPage(BasePage):
 
     def reset(self):
         if messagebox.askyesno("確認", "確定送出 Alarm Reset？"):
-            result = self.app.command.send_alarm_reset(); self.command_label.configure(text=f"Command: {result.message}")
+            result = self.app.send_alarm_reset(); self.command_label.configure(text=f"Command: {result.message}")

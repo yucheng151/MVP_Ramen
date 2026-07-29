@@ -15,6 +15,12 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 from config import PLC_IP, PLC_PORT, PLC_SLAVE_ID, PLC_TIMEOUT
+from register_map import (
+    ROBOT_MANUAL_INTERNAL_END,
+    ROBOT_MANUAL_INTERNAL_START,
+    ROBOT_READ_ONLY_END,
+    ROBOT_READ_ONLY_START,
+)
 
 
 class HMIPlcClient:
@@ -114,6 +120,10 @@ class HMIPlcClient:
         """寫入單一個 PLC Holding Register（D 暫存器）。"""
         if address < 0:
             raise ValueError("address 不可小於 0")
+        if ROBOT_READ_ONLY_START <= address <= ROBOT_READ_ONLY_END:
+            raise ValueError("Robot D12100~D12156 registers are read-only from HMI side")
+        if ROBOT_MANUAL_INTERNAL_START <= address <= ROBOT_MANUAL_INTERNAL_END:
+            raise ValueError("Robot D3080~D3093 registers are PLC-internal and HMI write is forbidden")
 
         with self.lock:
             if not self.connected:
@@ -148,6 +158,11 @@ class HMIPlcClient:
             raise ValueError("start_address 不可小於 0")
         if not values:
             raise ValueError("values 不可為空")
+        end_address = start_address + len(values) - 1
+        if start_address <= ROBOT_READ_ONLY_END and end_address >= ROBOT_READ_ONLY_START:
+            raise ValueError("Robot D12100~D12156 registers are read-only from HMI side")
+        if start_address <= ROBOT_MANUAL_INTERNAL_END and end_address >= ROBOT_MANUAL_INTERNAL_START:
+            raise ValueError("Robot D3080~D3093 registers are PLC-internal and HMI write is forbidden")
 
         with self.lock:
             if not self.connected:

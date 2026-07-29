@@ -4,6 +4,13 @@ from __future__ import annotations
 from datetime import datetime
 import threading
 
+from register_map import (
+    ROBOT_MANUAL_INTERNAL_END,
+    ROBOT_MANUAL_INTERNAL_START,
+    ROBOT_READ_ONLY_END,
+    ROBOT_READ_ONLY_START,
+)
+
 
 class MockHMIPlcClient:
     def __init__(self, ip: str = "MOCK", **_kwargs) -> None:
@@ -17,7 +24,9 @@ class MockHMIPlcClient:
         self.last_write_time = None
         self.registers = {101: 0, 102: 24, 103: 150, 104: 10, 105: 10,
                           106: 50, 107: 50, 108: 150, 109: 10, 110: 10,
-                          111: 50, 112: 50, 1105: 1, 1107: 0, 1110: 0}
+                          111: 50, 112: 50, 1105: 1, 1107: 0, 1110: 0,
+                          1120: 0, 1121: 0, 1122: 0, 1123: 0,
+                          12100: 0x0006, 12150: 0}
 
     def connect(self) -> bool:
         self.connected = True
@@ -40,6 +49,10 @@ class MockHMIPlcClient:
         return [self.registers.get(address + i, 0) for i in range(count)]
 
     def write_d(self, address: int, value: int) -> bool:
+        if ROBOT_READ_ONLY_START <= address <= ROBOT_READ_ONLY_END:
+            raise ValueError("Robot D12100~D12156 registers are read-only from HMI side")
+        if ROBOT_MANUAL_INTERNAL_START <= address <= ROBOT_MANUAL_INTERNAL_END:
+            raise ValueError("Robot D3080~D3093 registers are PLC-internal and HMI write is forbidden")
         if not self.connected:
             return False
         self.registers[address] = int(value) & 0xFFFF
@@ -50,10 +63,20 @@ class MockHMIPlcClient:
                 self.registers[101] = self.registers.get(1003, 0)
             elif command == 11:
                 self.registers[101] = 0
+            elif command == 40:
+                self.registers[1120] = 3
+                self.registers[1121] = self.registers.get(1001, 0)
+                self.registers[1122] = 200
+                self.registers[1123] = 0
         self.last_write_time = datetime.now()
         return True
 
     def write_d_block(self, start_address: int, values: list[int]) -> bool:
+        end_address = start_address + len(values) - 1
+        if start_address <= ROBOT_READ_ONLY_END and end_address >= ROBOT_READ_ONLY_START:
+            raise ValueError("Robot D12100~D12156 registers are read-only from HMI side")
+        if start_address <= ROBOT_MANUAL_INTERNAL_END and end_address >= ROBOT_MANUAL_INTERNAL_START:
+            raise ValueError("Robot D3080~D3093 registers are PLC-internal and HMI write is forbidden")
         if not self.connected:
             return False
         for offset, value in enumerate(values):

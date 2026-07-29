@@ -16,11 +16,15 @@ class AlarmPage(BasePage):
         self.listbox.delete(0, "end"); history = self.app.alarm_history
         if not history: self.listbox.insert("end", "✓ No Active Alarm")
         for name, record in sorted(history.items(), key=lambda item: item[1]["time"], reverse=True):
-            state = "Active" if record["active"] else "Recovered"
-            marker = "●" if record["active"] else "✓"
+            if record["active"] and record.get("condition_active", True):
+                state, marker = "Active", "●"
+            elif record["active"]:
+                state, marker = "Latched — Reset Required", "◆"
+            else:
+                state, marker = "Recovered", "✓"
             self.listbox.insert("end", f"{marker} {record['time']:%Y-%m-%d %H:%M:%S}  {state}  {name}")
 
     def reset(self):
         if messagebox.askyesno("Alarm Reset", "Send the alarm reset command?"):
-            result = self.app.command.send_alarm_reset()
+            result = self.app.send_alarm_reset()
             (messagebox.showinfo if result.ok else messagebox.showerror)("Alarm Reset", result.message)

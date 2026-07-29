@@ -13,7 +13,7 @@ if errorlevel 1 (
 )
 
 echo [2/2] Creating the automatic update task...
-schtasks /Create /TN "MVP Ramen HMI Auto Update" /TR "\"%~dp0ipc_auto_update.cmd\"" /SC MINUTE /MO 1 /F
+schtasks /Create /TN "MVP Ramen HMI Auto Update" /TR "\"%SystemRoot%\System32\wscript.exe\" \"%~dp0ipc_auto_update_hidden.vbs\"" /SC MINUTE /MO 1 /F
 if errorlevel 1 (
     echo.
     echo ERROR: Unable to create the automatic update task.
