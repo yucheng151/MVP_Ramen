@@ -126,7 +126,8 @@ def button_style(color=BLUE):
 def status_color(value: str):
     return {
         "Normal": GREEN, "Ready": GREEN, "Online": GREEN, "Auto": GREEN,
-        "Running": BLUE, "Stopping": YELLOW, "Manual": YELLOW, "Warning": YELLOW, "Busy": YELLOW,
+        "Running": BLUE, "Stopping": YELLOW, "Manual": YELLOW, "Semi Auto": BLUE,
+        "Warning": YELLOW, "Busy": YELLOW,
         "Alarm": RED, "Timeout": RED, "Jam": RED, "Empty": RED,
         "Driver Offline": RED, "Low Material": YELLOW,
         "Offline": GRAY, "Unknown": GRAY, "Stop": GRAY,

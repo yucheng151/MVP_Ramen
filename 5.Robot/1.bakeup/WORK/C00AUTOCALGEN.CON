@@ -1,0 +1,18 @@
+; Copyright(c) 2001 NACHI-Fujikoshi corporation. All Rights Reserved.
+;------------------------------------------------------------------------
+
+[ACAL_HEADER]
+FILENAME=C00AUTOCALGEN.CON
+VER= 1.00.00
+DATE= 3/12/2003
+EMESS= This is the default file for Auto Calibration (specification of the number of measurement points).
+JMESS= 自動ｷｬﾘﾌﾞﾚｰｼｮﾝ（測定ポイント数の指定）用初期値ファイルです。
+PROTECT=0x0
+
+[ACAL_GEN_CONSTANT]
+MAX_POINTS_AC1_TF1=13,21,19,10,7
+MAX_POINTS_AC2_TF1=0,0,19,10,7
+MAX_POINTS_AC1_TF2=0,0,0,10,7
+MAX_POINTS_AC2_TF2=0,0,0,10,7
+MAX_POINTS_AC1_TF3=0,0,0,0,7
+MAX_POINTS_AC2_TF3=0,0,0,0,7

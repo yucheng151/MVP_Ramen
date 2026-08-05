@@ -28,7 +28,7 @@ HOTSPOTS = (
 
 
 class ModeSelectorKnob(tk.Frame):
-    """Two-position physical selector styled to match the EMC control."""
+    """Three-position Manual / Semi Auto / Auto UI-only selector."""
 
     def __init__(self, parent, command):
         super().__init__(parent, width=105, height=98, bg=BG)
@@ -36,6 +36,10 @@ class ModeSelectorKnob(tk.Frame):
         asset_dir = Path(__file__).resolve().parent / "assets"
         self._manual_image = tk.PhotoImage(file=str(asset_dir / "mode_manual.png"))
         self._auto_image = tk.PhotoImage(file=str(asset_dir / "mode_auto.png"))
+        semi_source = Image.open(asset_dir / "mode_manual.png").convert("RGBA")
+        self._semi_image = ImageTk.PhotoImage(
+            semi_source.rotate(-45, resample=Image.Resampling.BICUBIC)
+        )
         self._button = tk.Button(
             self, image=self._manual_image, command=command,
             bg=BG, activebackground=BG, width=78, height=78,
@@ -49,14 +53,14 @@ class ModeSelectorKnob(tk.Frame):
         self._label.pack(pady=(0, 1))
 
     def set_mode(self, mode):
-        manual = mode == "Manual"
-        self._button.configure(
-            image=self._manual_image if manual else self._auto_image
-        )
-        self._label.configure(
-            text="MANUAL" if manual else "AUTO",
-            fg=YELLOW if manual else GREEN,
-        )
+        if mode == "Manual":
+            image, text, color = self._manual_image, "MANUAL", YELLOW
+        elif mode == "Semi Auto":
+            image, text, color = self._semi_image, "SEMI AUTO", BLUE
+        else:
+            image, text, color = self._auto_image, "AUTO", GREEN
+        self._button.configure(image=image)
+        self._label.configure(text=text, fg=color)
 
 
 class InitializePhysicalButton(tk.Frame):

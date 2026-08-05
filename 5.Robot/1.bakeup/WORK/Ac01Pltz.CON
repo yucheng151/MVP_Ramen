@@ -1,0 +1,13 @@
+; Copyright(c) 2009 Daihen corporation. All Rights Reserved.
+;------------------------------------------------------------------------
+
+[ACFHAND_HEADER]
+FILENAME=AC01PLTZ.INI
+VER=1.00.00
+DATE=07/30/2009
+EMESS=This is the palletize constant file.
+JMESS=パレタイズ定数ファイルです。
+PROTECT=0x0
+
+[CONDITION]
+PALLET_INTP=1

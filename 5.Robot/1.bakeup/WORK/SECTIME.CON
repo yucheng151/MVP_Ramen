@@ -1,0 +1,7 @@
+[HEADER]
+FILENAME=SECTIME.CON
+VER=1.00.00
+DATE=2024/11/19
+EMESS=This is the stop watch file.
+JMESS=区間タイム測定ファイルです。
+PROTECT=0x0

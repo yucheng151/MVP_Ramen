@@ -42,6 +42,7 @@ class HMIUI:
         self.command = HMICommand(self.plc)
         self.status = HMIStatus(self.plc)
         self.machine_mode = "Manual"  # 預留：未來改由 PLC 模式暫存器更新
+        self._mode_step_direction = 1
         self.conveyor_run_requested: bool | None = None
         self.snapshot = self._empty_snapshot()
         self.active_alarms: dict[str, datetime] = {}
@@ -197,8 +198,14 @@ class HMIUI:
             self.snapshot = {**self.snapshot, "conveyor_state": state}
 
     def toggle_mode(self) -> None:
-        """切換尚未綁定 PLC 位址的暫存 Manual / Auto 模式。"""
-        self.set_mode("Auto" if self.machine_mode == "Manual" else "Manual")
+        """Move the UI-only three-position selector back and forth."""
+        modes = ("Manual", "Semi Auto", "Auto")
+        current = modes.index(self.machine_mode) if self.machine_mode in modes else 0
+        if current == 0:
+            self._mode_step_direction = 1
+        elif current == len(modes) - 1:
+            self._mode_step_direction = -1
+        self.set_mode(modes[current + self._mode_step_direction])
 
     def show_emergency_stop_unconfigured(self) -> None:
         """UI placeholder; no PLC command is sent until its mapping is confirmed."""
