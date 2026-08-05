@@ -4,7 +4,7 @@ from tkinter import messagebox
 
 from register_map import CONVEYOR_SET_SPEED_WRITE, FAULT_NAMES, PARAMETER_LIMITS, SENSOR_BITS
 from ui_common import (
-    BG, PANEL, PANEL_2, TEXT, MUTED, GREEN, RED, BLUE, GRAY, YELLOW,
+    BG, PANEL, PANEL_2, TEXT, MUTED, GREEN, RED, BLUE, GRAY,
     button_style,
 )
 
@@ -18,9 +18,6 @@ READBACK_FIELDS = (
     ("Bus Current Setting", "-", "D106", 6),
     ("Phase Current Setting", "-", "D107", 7),
 )
-
-STOP_RETRY_INTERVAL_MS = 350
-
 
 class ConveyorControlPage(tk.Frame):
     # 保留名稱供既有主頁入口相容；目前已無分頁。
@@ -37,7 +34,6 @@ class ConveyorControlPage(tk.Frame):
         self._sensor_tooltip = None
         self._build_header()
         self._build_content()
-        self.after(STOP_RETRY_INTERVAL_MS, self._enforce_stop_until_zero)
 
     def _build_header(self):
         from ui_main_page import MainControlPanel, SideNavigation
@@ -285,21 +281,30 @@ class ConveyorControlPage(tk.Frame):
     def _hold_start(self, _event=None):
         if self._run_pressed or not self._manual_allowed():
             return
+        if not self.app.begin_manual_action("Conveyor"):
+            self.manual_message.configure(
+                text=self.app.manual_action_reason("Conveyor"), fg=RED
+            )
+            return
         speed = self._run_speed()
         if speed is None:
+            self.app.finish_manual_action("Conveyor")
             return
         # ButtonPress 只處理一次；按住期間忽略任何重複事件。
         self._run_pressed = True
         result = self.app.command.send_conveyor_run(speed)
         if result.ok:
             self.app.set_conveyor_run_requested(True)
+        else:
+            self._run_pressed = False
+            self.app.finish_manual_action("Conveyor")
         self.manual_message.configure(text="RUNNING — release to stop" if result.ok else result.message,
                                       fg=BLUE if result.ok else RED)
 
     def _hold_stop(self, _event=None):
         if not self._run_pressed:
             return
-        # ButtonRelease 先送一次 Stop；背景循環會重送到 D101 歸零。
+        # ButtonRelease only sends one Stop command.
         self._run_pressed = False
         self.stop_conveyor()
 
@@ -313,37 +318,6 @@ class ConveyorControlPage(tk.Frame):
             self.app.set_conveyor_run_requested(False)
         self.manual_message.configure(text="STOPPED" if result.ok else result.message,
                                       fg=GREEN if result.ok else RED)
-
-    def _enforce_stop_until_zero(self):
-        """Manual hold-to-run safety: repeat CMD 11 until D101 reaches zero."""
-        try:
-            snapshot = self.app.snapshot
-            actual_speed = snapshot["conveyor"][1]
-            should_stop = (
-                not self._run_pressed
-                and self.app.machine_mode == "Manual"
-                and snapshot["online"]
-                and actual_speed != 0
-            )
-            if should_stop:
-                result = self.app.command.send_conveyor_stop()
-                if result.ok:
-                    self.app.set_conveyor_run_requested(False)
-                    self.manual_message.configure(
-                        text=f"STOPPING — D101: {actual_speed} RPM",
-                        fg=YELLOW,
-                    )
-                else:
-                    self.manual_message.configure(text=result.message, fg=RED)
-            elif (
-                not self._run_pressed
-                and self.app.machine_mode == "Manual"
-                and snapshot["online"]
-                and actual_speed == 0
-            ):
-                self.manual_message.configure(text="STOPPED — D101: 0 RPM", fg=GREEN)
-        finally:
-            self.after(STOP_RETRY_INTERVAL_MS, self._enforce_stop_until_zero)
 
     def show_fault_detail(self):
         word = self.app.snapshot["conveyor"][0]
@@ -370,7 +344,8 @@ class ConveyorControlPage(tk.Frame):
         self._global_controls.refresh()
         self._side_nav.refresh()
         manual_enabled = (self.app.machine_mode == "Manual" and snapshot["online"]
-                          and snapshot["conveyor_timeout_word"] == 0)
+                          and snapshot["conveyor_timeout_word"] == 0
+                          and self.app.manual_action_available("Conveyor"))
         self.hold_button.configure(state="normal" if manual_enabled else "disabled")
         parameter_state = "normal" if self.app.machine_mode == "Manual" else "disabled"
         for entry in self.parameter_entries.values():

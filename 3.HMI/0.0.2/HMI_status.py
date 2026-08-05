@@ -14,6 +14,7 @@ from HMI_plc_client import HMIPlcClient
 from register_map import (
     PLC_TO_HMI_SENSOR_STATUS,
     PLC_ROBOT_MANUAL_STATUS,
+    PLC_ROBOT_IDLE_STATUS,
     ROBOT_COMMAND_BITS,
     ROBOT_COMMAND_WORD,
     ROBOT_STATUS_BITS,
@@ -97,6 +98,7 @@ class RobotManualStatus:
     ack_index: Optional[int] = None
     result_code: Optional[int] = None
     alarm_code: Optional[int] = None
+    robot_idle: Optional[bool] = None
 
 
 @dataclass
@@ -180,7 +182,10 @@ class HMIStatus:
         # Read only. There is intentionally no Robot write path in HMIStatus.
         robot_status_data = self.plc.read_d(ROBOT_STATUS_WORD, 5)
         robot_command_data = self.plc.read_d(ROBOT_COMMAND_WORD, 7)
-        robot_manual_data = self.plc.read_d(PLC_ROBOT_MANUAL_STATUS, 4)
+        robot_manual_count = PLC_ROBOT_IDLE_STATUS - PLC_ROBOT_MANUAL_STATUS + 1
+        robot_manual_data = self.plc.read_d(
+            PLC_ROBOT_MANUAL_STATUS, robot_manual_count
+        )
         robot = RobotStatus()
         if (
             robot_status_data is not None
@@ -215,13 +220,14 @@ class HMIStatus:
             })
             robot = RobotStatus(**robot_values)
         robot_manual = RobotManualStatus()
-        if robot_manual_data is not None and len(robot_manual_data) >= 4:
+        if robot_manual_data is not None and len(robot_manual_data) >= 5:
             robot_manual = RobotManualStatus(
                 read_ok=True,
                 status=_signed_word(robot_manual_data[0]),
                 ack_index=robot_manual_data[1],
                 result_code=_signed_word(robot_manual_data[2]),
                 alarm_code=_signed_word(robot_manual_data[3]),
+                robot_idle=bool(robot_manual_data[4] & 0x0001),
             )
 
         return HMIStatusResult(

@@ -26,12 +26,13 @@ class EmergencyStopButton(tk.Button):
         self._latched = False
         self._flash_on = False
         self._flash_job = None
+        self._flash_generation = 0
         super().__init__(
             parent,
             image=self._normal_image,
             command=self._toggle_latched,
             bg=BG,
-            activebackground="#401010",
+            activebackground=BG,
             width=78,
             height=78,
             relief="flat",
@@ -45,7 +46,7 @@ class EmergencyStopButton(tk.Button):
         self._instances.append(self)
 
     def _show_pressed(self, _event=None):
-        self.configure(image=self._pressed_image, bg="#401010", relief="sunken")
+        self.configure(image=self._pressed_image, bg=BG, relief="sunken")
 
     def _show_released(self, _event=None):
         self.after(140, self._restore_if_unlatched)
@@ -56,16 +57,24 @@ class EmergencyStopButton(tk.Button):
 
     def _toggle_latched(self):
         new_state = not self._latched
+        if not self._external_command(new_state):
+            self._restore_if_unlatched()
+            return
         for button in tuple(self._instances):
             if button.winfo_exists():
                 button._set_latched(new_state)
-        self._external_command()
 
     def _set_latched(self, latched):
+        latched = bool(latched)
+        self._flash_generation += 1
+        generation = self._flash_generation
         self._latched = latched
         if latched:
+            if self._flash_job is not None:
+                self.after_cancel(self._flash_job)
+                self._flash_job = None
             self._flash_on = True
-            self._flash()
+            self._flash(generation)
         else:
             if self._flash_job is not None:
                 self.after_cancel(self._flash_job)
@@ -73,15 +82,22 @@ class EmergencyStopButton(tk.Button):
             self._flash_on = False
             self.configure(image=self._normal_image, bg=BG, relief="flat")
 
-    def _flash(self):
-        if not self._latched:
+    def set_latched(self, latched):
+        """Synchronize this page's EMC animation with the HMI request state."""
+        if bool(latched) != self._latched:
+            self._set_latched(latched)
+
+    def _flash(self, generation=None):
+        if generation is None:
+            generation = self._flash_generation
+        if not self._latched or generation != self._flash_generation:
             return
         if self._flash_on:
-            self.configure(image=self._pressed_image, bg="#7a1010", relief="sunken")
+            self.configure(image=self._pressed_image, bg=BG, relief="sunken")
         else:
-            self.configure(image=self._pressed_image, bg="#260606", relief="sunken")
+            self.configure(image=self._normal_image, bg=BG, relief="sunken")
         self._flash_on = not self._flash_on
-        self._flash_job = self.after(420, self._flash)
+        self._flash_job = self.after(420, lambda: self._flash(generation))
 
 
 class BasePage(tk.Frame):

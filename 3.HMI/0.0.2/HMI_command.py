@@ -11,11 +11,17 @@ from typing import Optional
 
 from HMI_plc_client import HMIPlcClient
 from register_map import (
+    CMD_MODE_AUTO,
+    CMD_MODE_MANUAL,
+    CMD_MODE_SEMI_AUTO,
     HMI_CMD_CODE,
     HMI_CMD_INDEX,
     HMI_CMD_VALID,
     HMI_CONVEYOR_SPEED,
     HMI_ROBOT_ACTION_NO,
+    MACHINE_MODE_AUTO,
+    MACHINE_MODE_MANUAL,
+    MACHINE_MODE_SEMI_AUTO,
 )
 
 
@@ -158,6 +164,51 @@ class HMICommand:
     def send_bowl_dispense(self) -> HMICommandResult:
         """送出一次落碗命令。"""
         return self.send_command(CMD_BOWL_DISPENSE, conveyor_speed=0)
+
+    def send_machine_mode(self, mode: int) -> HMICommandResult:
+        """Issue one mode command through the existing D1000~D1002 handshake."""
+        command_codes = {
+            MACHINE_MODE_MANUAL: CMD_MODE_MANUAL,
+            MACHINE_MODE_SEMI_AUTO: CMD_MODE_SEMI_AUTO,
+            MACHINE_MODE_AUTO: CMD_MODE_AUTO,
+        }
+        command_code = command_codes.get(mode)
+        if command_code is None:
+            self.last_error = f"Invalid machine mode: {mode}"
+            return HMICommandResult(
+                False, CMD_NONE, self.last_command_index, 0, self.last_error,
+            )
+        if not self.plc.connected:
+            self.last_error = "PLC Offline"
+            return HMICommandResult(
+                False, command_code, self.last_command_index, 0, self.last_error,
+            )
+
+        command_index = self.next_command_index()
+        with self.plc.lock:
+            if not self.write_d(D_HMI_TO_PLC_CMD_VALID, 0):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot clear Command Valid")
+            if not self.write_d(D_HMI_TO_PLC_CMD_CODE, command_code):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot write mode command")
+            if not self.write_d(D_HMI_TO_PLC_CMD_INDEX, command_index):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot write Command Index")
+            if not self.write_d(D_HMI_TO_PLC_CMD_VALID, 1):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot set Command Valid")
+        return HMICommandResult(True, command_code, command_index, 0, "OK")
+
+    def clear_machine_mode_command(self) -> bool:
+        """Release the shared handshake after a matched mode ACK."""
+        if not self.plc.connected:
+            self.last_error = "PLC Offline"
+            return False
+        with self.plc.lock:
+            if not self.write_d(D_HMI_TO_PLC_CMD_VALID, 0):
+                return False
+            return self.write_d(D_HMI_TO_PLC_CMD_CODE, CMD_NONE)
 
     def send_robot_manual(
         self,

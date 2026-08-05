@@ -28,7 +28,7 @@ HOTSPOTS = (
 
 
 class ModeSelectorKnob(tk.Frame):
-    """Three-position Manual / Semi Auto / Auto UI-only selector."""
+    """Three-position selector whose displayed state follows PLC D1109."""
 
     def __init__(self, parent, command):
         super().__init__(parent, width=105, height=98, bg=BG)
@@ -52,15 +52,22 @@ class ModeSelectorKnob(tk.Frame):
         )
         self._label.pack(pady=(0, 1))
 
-    def set_mode(self, mode):
+    def set_mode(self, mode, switching=False):
         if mode == "Manual":
             image, text, color = self._manual_image, "MANUAL", YELLOW
         elif mode == "Semi Auto":
             image, text, color = self._semi_image, "SEMI AUTO", BLUE
         else:
             image, text, color = self._auto_image, "AUTO", GREEN
-        self._button.configure(image=image)
-        self._label.configure(text=text, fg=color)
+        self._button.configure(
+            image=image,
+            state="disabled" if switching else "normal",
+            cursor="arrow" if switching else "hand2",
+        )
+        self._label.configure(
+            text="SWITCHING" if switching else text,
+            fg=BLUE if switching else color,
+        )
 
 
 class InitializePhysicalButton(tk.Frame):
@@ -111,6 +118,7 @@ class AlarmResetPhysicalButton(tk.Frame):
         self._normal_image = tk.PhotoImage(file=str(asset_dir / "alarm_reset.png"))
         self._active_image = tk.PhotoImage(file=str(asset_dir / "alarm_reset_active.png"))
         self._alarm_active = False
+        self._reset_ready = False
         self._flash_on = False
         self._flash_job = None
         self._button = tk.Button(
@@ -125,7 +133,7 @@ class AlarmResetPhysicalButton(tk.Frame):
         )
         self._label.pack(pady=(0, 1))
 
-    def set_state(self, alarm_active, online):
+    def set_state(self, alarm_active, online, reset_ready=False):
         # Do not use Tk's disabled state here: it grays out the alarm lamp image.
         # The command handler already blocks reset commands while PLC is offline.
         self._button.configure(
@@ -133,22 +141,28 @@ class AlarmResetPhysicalButton(tk.Frame):
             cursor="hand2" if online else "arrow",
         )
         alarm_active = bool(alarm_active)
-        if alarm_active != self._alarm_active:
+        reset_ready = bool(reset_ready and alarm_active and online)
+        if (alarm_active, reset_ready) != (self._alarm_active, self._reset_ready):
             self._alarm_active = alarm_active
-            if alarm_active:
+            self._reset_ready = reset_ready
+            if self._flash_job is not None:
+                self.after_cancel(self._flash_job)
+                self._flash_job = None
+            if reset_ready:
+                # EMC request is released and PLC EMC remains latched: reset is ready.
+                self._flash_on = False
+                self._button.configure(image=self._active_image)
+            elif alarm_active:
                 self._flash_on = True
                 self._flash()
             else:
-                if self._flash_job is not None:
-                    self.after_cancel(self._flash_job)
-                    self._flash_job = None
                 self._button.configure(image=self._normal_image)
         self._label.configure(
             fg=RED if alarm_active else YELLOW if online else GRAY
         )
 
     def _flash(self):
-        if not self._alarm_active:
+        if not self._alarm_active or self._reset_ready:
             return
         self._button.configure(
             image=self._active_image if self._flash_on else self._normal_image
@@ -178,7 +192,7 @@ class MainControlPanel(tk.Frame):
         emergency_group.grid(row=0, column=3, padx=1, sticky="nsew")
         emergency_group.pack_propagate(False)
         self.emergency_stop_button = EmergencyStopButton(
-            emergency_group, app.show_emergency_stop_unconfigured
+            emergency_group, app.set_hmi_emc
         )
         self.emergency_stop_button.pack(anchor="n")
         tk.Label(
@@ -188,10 +202,21 @@ class MainControlPanel(tk.Frame):
 
     def refresh(self):
         snapshot = self.app.snapshot
-        self.mode_knob.set_mode(self.app.machine_mode)
+        self.mode_knob.set_mode(
+            self.app.machine_mode,
+            self.app.mode_change_pending_index is not None,
+        )
         self.initialize_button.set_enabled(snapshot["online"])
+        self.emergency_stop_button.set_latched(
+            snapshot.get("hmi_emc_requested", False)
+        )
         self.alarm_reset_button.set_state(
-            snapshot["system"] == "Alarm", snapshot["online"]
+            snapshot["system"] == "Alarm",
+            snapshot["online"],
+            reset_ready=(
+                snapshot["system"] == "Alarm"
+                and not snapshot.get("alarm_condition_active", False)
+            ),
         )
 
     def _initialize_machine(self):
@@ -210,19 +235,9 @@ class MainControlPanel(tk.Frame):
             messagebox.showerror("INITIALIZE", f"命令送出失敗：{result.message}", parent=self)
 
     def _reset_alarm(self):
-        if not self.app.snapshot.get("online", False):
-            messagebox.showerror("ALM RST", "PLC Offline，無法執行 Alarm Reset。", parent=self)
-            return
-        if not messagebox.askyesno(
-            "ALM RST", "確定要執行 Alarm Reset？",
-            icon="warning", parent=self,
-        ):
-            return
-        result = self.app.send_alarm_reset()
-        if result.ok:
-            messagebox.showinfo("ALM RST", "Alarm Reset 命令已送出。", parent=self)
-        else:
-            messagebox.showerror("ALM RST", f"命令送出失敗：{result.message}", parent=self)
+        # ALM RST uses the existing CMD 6 without confirmation/result dialogs.
+        if self.app.snapshot.get("online", False):
+            self.app.send_alarm_reset()
 
 
 class SideNavigation(tk.Frame):
@@ -273,9 +288,20 @@ class SideNavigation(tk.Frame):
     def refresh(self):
         snapshot = self.app.snapshot
         arm_online = snapshot.get("arm_online")
+        robot = snapshot.get("robot")
         robot_manual = snapshot.get("robot_manual")
         robot_alarm = bool(
             (
+                robot is not None
+                and robot.read_ok
+                and (
+                    robot.error_signal
+                    or robot.alarm_signal
+                    or robot.estop_active
+                    or robot.error_code not in (None, 0)
+                )
+            )
+            or (
                 robot_manual is not None
                 and robot_manual.read_ok
                 and (
@@ -430,7 +456,8 @@ class MainPage(tk.Frame):
             elif (hotspot["id"] == "bowl_stack"
                   and self.app.machine_mode == "Manual"
                   and self.app.snapshot.get("online", False)
-                  and not self.app.snapshot.get("bowl_dispenser_busy", False)):
+                  and not self.app.snapshot.get("bowl_dispenser_busy", False)
+                  and self.app.manual_action_available("Bowl")):
                 self.canvas.tag_bind(tag, "<Button-1>", self._send_bowl_dispense)
                 self.canvas.tag_bind(tag, "<Enter>", self._bowl_button_enter)
                 self.canvas.tag_bind(tag, "<Leave>", self._bowl_button_leave)
@@ -439,9 +466,12 @@ class MainPage(tk.Frame):
         """每次 click 僅送出一個 CMD_BOWL_DISPENSE。"""
         if (self.app.machine_mode != "Manual"
                 or not self.app.snapshot.get("online", False)
-                or self.app.snapshot.get("bowl_dispenser_busy", False)):
+                or self.app.snapshot.get("bowl_dispenser_busy", False)
+                or not self.app.begin_manual_action("Bowl")):
             return
-        self.app.command.send_bowl_dispense()
+        result = self.app.command.send_bowl_dispense()
+        if not result.ok:
+            self.app.finish_manual_action("Bowl")
 
     def _bowl_button_enter(self, _event=None):
         self._bowl_button_hovered = True
@@ -502,9 +532,20 @@ class MainPage(tk.Frame):
             return "Future"
         if hotspot_id == "robot":
             arm_online = snapshot.get("arm_online")
+            robot = snapshot.get("robot")
             robot_manual = snapshot.get("robot_manual")
             if (
                 (
+                    robot is not None
+                    and robot.read_ok
+                    and (
+                        robot.error_signal
+                        or robot.alarm_signal
+                        or robot.estop_active
+                        or robot.error_code not in (None, 0)
+                    )
+                )
+                or (
                     robot_manual is not None
                     and robot_manual.read_ok
                     and (

@@ -131,6 +131,11 @@ class RobotPage(BasePage):
             font=("Consolas", 9, "bold"),
         )
         self._pending_label.pack(side="right")
+        self._robot_idle_label = tk.Label(
+            heading, text="ROBOT IDLE: --", bg=PANEL, fg=MUTED,
+            font=("Consolas", 9, "bold"),
+        )
+        self._robot_idle_label.pack(side="right", padx=(0, 18))
 
         status_strip = tk.Frame(panel, bg=PANEL)
         status_strip.pack(fill="x", padx=14, side="bottom", pady=(0, 5))
@@ -251,11 +256,19 @@ class RobotPage(BasePage):
             parent=self,
         ):
             return
+        if not self.app.begin_manual_action("Robot"):
+            messagebox.showwarning(
+                "Robot Manual Interlock",
+                self.app.manual_action_reason("Robot"),
+                parent=self,
+            )
+            return
         self._last_execute_at = time.monotonic()
         result = self.app.command.send_robot_manual(
             action_no, cabinet, cut_no, output
         )
         if not result.ok:
+            self.app.finish_manual_action("Robot")
             messagebox.showerror("Robot Manual", result.message, parent=self)
             return
         self._pending_command_index = result.command_index
@@ -291,10 +304,12 @@ class RobotPage(BasePage):
             reasons.append("Heartbeat timeout")
         if self.app.machine_mode != "Manual":
             reasons.append("Please switch to Manual Mode")
-        if robot is None or not robot.read_ok or not robot.status_output:
+        if robot is None or not robot.read_ok or not robot.busy:
             reasons.append("Robot is Offline")
         if manual_reply is None or not manual_reply.read_ok:
             reasons.append("Robot manual status communication is offline")
+        elif manual_reply.robot_idle is not True:
+            reasons.append("Robot is not Idle (D1124.0 = OFF)")
         if (
             manual_reply is not None
             and manual_reply.read_ok
@@ -317,6 +332,9 @@ class RobotPage(BasePage):
             reasons.append("Robot manual alarm is active")
         if self._pending_command_index is not None:
             reasons.append("Previous command is still running")
+        action_reason = self.app.manual_action_reason("Robot")
+        if action_reason:
+            reasons.append(action_reason)
         if self._cleanup_required:
             reasons.append("Robot command cleanup is pending")
         if self._timeout_latched:
@@ -332,6 +350,8 @@ class RobotPage(BasePage):
         self._cleanup_required = True
         if self.app.snapshot.get("online"):
             self._cleanup_required = not self.app.command.clear_robot_manual_command()
+        if not self._cleanup_required:
+            self.app.finish_manual_action("Robot")
         self._pending_label.configure(text="PENDING INDEX: --", fg=MUTED)
         color = RED if error or timeout else GREEN
         self._command_state_label.configure(text=state.upper(), fg=color)
@@ -351,6 +371,8 @@ class RobotPage(BasePage):
         snapshot = self.app.snapshot
         if self._cleanup_required and snapshot.get("online"):
             self._cleanup_required = not self.app.command.clear_robot_manual_command()
+            if not self._cleanup_required:
+                self.app.finish_manual_action("Robot")
         if (
             self._timeout_latched
             and self._pending_command_index is None
@@ -371,7 +393,7 @@ class RobotPage(BasePage):
             )
             return
         robot = snapshot.get("robot")
-        if robot is None or not robot.read_ok or not robot.status_output:
+        if robot is None or not robot.read_ok or not robot.busy:
             self._finish_robot_command(
                 "Error", "Robot command failed: Robot Offline", error=True
             )
@@ -414,11 +436,7 @@ class RobotPage(BasePage):
                 error=True,
             )
             return
-        if (
-            reply.status == 3
-            and reply.result_code == 200
-            and reply.alarm_code == 0
-        ):
+        if reply.result_code == 200 and reply.alarm_code == 0:
             self._finish_robot_command(
                 "Complete",
                 f"Robot 手動操作完成 · CMD 40 / Index #{reply.ack_index}",
@@ -451,29 +469,49 @@ class RobotPage(BasePage):
 
     def _build_bit_panel(self, parent, row, column, title, fields, padx, pady=(0, 0)):
         content = self._panel(parent, row, column, title, padx, pady)
+        # These monitor groups contain up to eleven signals.  A single vertical
+        # list is taller than the usable area on 1366x768/remote-desktop
+        # windows, so keep every signal visible in two compact columns.
+        split_at = (len(fields) + 1) // 2
+        content.grid_columnconfigure(1, weight=1, uniform="robot-bit-label")
+        content.grid_columnconfigure(5, weight=1, uniform="robot-bit-label")
         for row_index, field in enumerate(fields):
             if len(field) == 4:
                 key, label, address, warning = field
             else:
                 key, label, address = field
                 warning = False
+            display_row = row_index % split_at
+            column_offset = 0 if row_index < split_at else 4
             tk.Label(
                 content, text="●", bg=PANEL_2, fg=GRAY,
-                font=("Segoe UI", 10),
-            ).grid(row=row_index, column=0, padx=(10, 6), pady=2)
+                font=("Segoe UI", 9),
+            ).grid(
+                row=display_row, column=column_offset,
+                padx=((8 if column_offset == 0 else 5), 3), pady=1,
+            )
             tk.Label(
                 content, text=label, bg=PANEL_2, fg=TEXT,
-                font=("Segoe UI", 9), anchor="w",
-            ).grid(row=row_index, column=1, sticky="ew", pady=2)
+                font=("Segoe UI", 8), anchor="w",
+            ).grid(
+                row=display_row, column=column_offset + 1,
+                sticky="ew", pady=1,
+            )
             tk.Label(
                 content, text=address, bg=PANEL_2, fg=MUTED,
-                font=("Consolas", 8), anchor="e",
-            ).grid(row=row_index, column=2, padx=8, pady=2)
-            value = tk.Label(
-                content, text="--", width=5, bg=PANEL_2, fg=GRAY,
-                font=("Segoe UI", 9, "bold"),
+                font=("Consolas", 7), anchor="e",
+            ).grid(
+                row=display_row, column=column_offset + 2,
+                padx=(3, 3), pady=1,
             )
-            value.grid(row=row_index, column=3, padx=(0, 10), pady=2)
+            value = tk.Label(
+                content, text="--", width=3, bg=PANEL_2, fg=GRAY,
+                font=("Segoe UI", 8, "bold"),
+            )
+            value.grid(
+                row=display_row, column=column_offset + 3,
+                padx=(0, (7 if column_offset else 4)), pady=1,
+            )
             self._bit_values[key] = (value, warning)
 
     def _build_value_panel(self, parent, row, column, title, fields, padx, pady=(0, 0)):
@@ -502,9 +540,32 @@ class RobotPage(BasePage):
             button.configure(state="normal" if controls_enabled else "disabled")
         for selector in self._robot_route_selectors:
             selector.configure(state="readonly" if controls_enabled else "disabled")
+        snapshot = self.app.snapshot
+        robot = snapshot.get("robot")
+        manual_reply = snapshot.get("robot_manual")
+        robot_alarm = bool(
+            robot is not None
+            and robot.read_ok
+            and (
+                robot.error_signal
+                or robot.alarm_signal
+                or robot.estop_active
+                or robot.error_code not in (None, 0)
+            )
+        ) or bool(
+            manual_reply is not None
+            and manual_reply.read_ok
+            and (
+                manual_reply.alarm_code not in (None, 0)
+                or (
+                    manual_reply.result_code is not None
+                    and 400 <= manual_reply.result_code <= 599
+                )
+            )
+        )
         self._interlock_reason.configure(
-            text="" if controls_enabled else reasons[0],
-            fg=YELLOW if self.app.snapshot.get("online") else RED,
+            text="ALM" if robot_alarm else ("" if controls_enabled else reasons[0]),
+            fg=RED if robot_alarm or not snapshot.get("online") else YELLOW,
         )
         self._pending_label.configure(
             text=(
@@ -515,14 +576,26 @@ class RobotPage(BasePage):
             fg=BLUE if self._pending_command_index is not None else MUTED,
         )
 
-        manual_reply = self.app.snapshot.get("robot_manual")
+        idle = (
+            manual_reply.robot_idle
+            if manual_reply is not None and manual_reply.read_ok
+            else None
+        )
+        self._robot_idle_label.configure(
+            text=(
+                "ROBOT IDLE: ON" if idle is True
+                else "ROBOT IDLE: OFF" if idle is False
+                else "ROBOT IDLE: --"
+            ),
+            fg=GREEN if idle is True else RED if idle is False else MUTED,
+        )
         if manual_reply is not None and manual_reply.read_ok:
             status = manual_reply.status
             ack = manual_reply.ack_index
             result = manual_reply.result_code
             alarm = manual_reply.alarm_code
             failed = bool(alarm) or (result is not None and 400 <= result <= 599)
-            success = status == 3 and result == 200 and alarm == 0
+            success = result == 200 and alarm == 0
             accepted = result == 240
             current_pending_reply = (
                 self._pending_command_index is not None
@@ -558,6 +631,18 @@ class RobotPage(BasePage):
                     f"ACK INDEX #{ack}"
                 )
                 reply_color = YELLOW
+            elif status == 3:
+                reply_text = (
+                    f"PLC COMPLETED STATUS (D1120=3) · "
+                    f"INDEX #{ack} · RESULT {result}"
+                )
+                reply_color = GREEN
+            elif status == 4:
+                reply_text = (
+                    f"PLC ERROR STATUS (D1120=4) · "
+                    f"INDEX #{ack} · RESULT {result} · ALM {alarm}"
+                )
+                reply_color = RED
             else:
                 reply_text = (
                     f"IDLE · CMD 40 · INDEX #{ack} · "
@@ -571,17 +656,6 @@ class RobotPage(BasePage):
                 reply_text = (
                     f"PENDING · CMD 40 · INDEX #{self._pending_command_index} "
                     "· WAIT ACK"
-                )
-                reply_color = BLUE
-            elif (
-                self._pending_command_index is not None
-                and ack == self._pending_command_index
-                and result == 200
-                and status != 3
-            ):
-                reply_text = (
-                    f"PENDING · CMD 40 · INDEX #{self._pending_command_index} "
-                    f"· WAIT STATUS 3 (CURRENT {status})"
                 )
                 reply_color = BLUE
             elif (
@@ -618,8 +692,8 @@ class RobotPage(BasePage):
             return
 
         self._comm_value.configure(
-            text="ONLINE" if robot.status_output else "OFFLINE",
-            fg=GREEN if robot.status_output else GRAY,
+            text="ONLINE" if robot.busy else "OFFLINE",
+            fg=GREEN if robot.busy else GRAY,
         )
 
         for key, (value, warning) in self._bit_values.items():

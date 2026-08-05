@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 import threading
 import time
 import tkinter as tk
@@ -14,7 +15,18 @@ from HMI_heartbeat import HMIHeartbeat
 from HMI_plc_client import HMIPlcClient
 from HMI_status import HMIStatus
 from mock_plc_client import MockHMIPlcClient
-from register_map import CONVEYOR_TIMEOUT_WORD, FAULT_NAMES
+from register_map import (
+    CONVEYOR_TIMEOUT_WORD,
+    FAULT_NAMES,
+    HMI_EMC_BIT,
+    HMI_EMC_WORD,
+    PLC_EMC_ACTIVE_BIT,
+    PLC_EMC_STATUS_WORD,
+    PLC_MACHINE_MODE,
+    MACHINE_MODE_MANUAL,
+    MACHINE_MODE_SEMI_AUTO,
+    MACHINE_MODE_AUTO,
+)
 from ui_common import BG
 from ui_main_page import MainPage
 from ui_alarm_page import AlarmPage
@@ -24,6 +36,19 @@ from ui_robot_page import RobotPage
 from ui_conveyor_control_page import ConveyorControlPage
 
 PLC_STARTUP_GRACE_SECONDS = 8.0
+MODE_COMMAND_TIMEOUT_SECONDS = 8.0
+MODE_VALUE_TO_TEXT = {
+    MACHINE_MODE_MANUAL: "Manual",
+    MACHINE_MODE_SEMI_AUTO: "Semi Auto",
+    MACHINE_MODE_AUTO: "Auto",
+}
+MODE_TEXT_TO_VALUE = {text: value for value, text in MODE_VALUE_TO_TEXT.items()}
+MODE_SUCCESS_RESPONSE = {
+    MACHINE_MODE_MANUAL: 300,
+    MACHINE_MODE_SEMI_AUTO: 301,
+    MACHINE_MODE_AUTO: 302,
+}
+LOGGER = logging.getLogger(__name__)
 
 
 class HMIUI:
@@ -41,9 +66,21 @@ class HMIUI:
         self.heartbeat = HMIHeartbeat(self.plc)
         self.command = HMICommand(self.plc)
         self.status = HMIStatus(self.plc)
-        self.machine_mode = "Manual"  # 預留：未來改由 PLC 模式暫存器更新
+        # The display mode is updated only from PLC D1109 after startup.
+        self._last_valid_machine_mode = MACHINE_MODE_MANUAL
         self._mode_step_direction = 1
+        self._mode_lock = threading.RLock()
+        self.mode_change_pending_index: int | None = None
+        self.mode_change_target: int | None = None
+        self._mode_change_started = 0.0
+        self._mode_acknowledged = False
+        self._mode_notice: tuple[str, str] | None = None
+        self.machine_mode = "Manual"
+        self._manual_action_lock = threading.RLock()
+        self.manual_action_owner: str | None = None
+        self._bowl_busy_seen = False
         self.conveyor_run_requested: bool | None = None
+        self.hmi_emc_requested = False
         self.snapshot = self._empty_snapshot()
         self.active_alarms: dict[str, datetime] = {}
         self._alarm_started: dict[str, datetime] = {}
@@ -140,7 +177,11 @@ class HMIUI:
                 "hmi_comm": "--", "conveyor": [0] * 8, "parameters": [0] * 5,
                 "conveyor_rtu_online": False, "conveyor_state": "Unknown", "system": "Starting",
                 "conveyor_timeout_word": 0, "ack_index": "--", "response_code": "--",
+                "machine_mode": MACHINE_MODE_MANUAL, "machine_mode_error": "",
                 "ipc_online": False,
+                "plc_emc_active": False,
+                "hmi_emc_requested": False,
+                "alarm_condition_active": False,
                 "arm_online": None,
                 "robot": None,
                 "robot_manual": None,
@@ -197,6 +238,59 @@ class HMIUI:
                 state = "Stopping" if self.snapshot["conveyor"][1] > 0 else "Ready"
             self.snapshot = {**self.snapshot, "conveyor_state": state}
 
+    def begin_manual_action(self, owner: str) -> bool:
+        """Acquire the one-at-a-time machine manual action interlock."""
+        with self._manual_action_lock:
+            if self.manual_action_owner is not None:
+                return False
+            self.manual_action_owner = owner
+            if owner == "Bowl":
+                self._bowl_busy_seen = False
+            return True
+
+    def finish_manual_action(self, owner: str) -> None:
+        with self._manual_action_lock:
+            if self.manual_action_owner == owner:
+                self.manual_action_owner = None
+                if owner == "Bowl":
+                    self._bowl_busy_seen = False
+
+    def manual_action_available(self, owner: str | None = None) -> bool:
+        with self._manual_action_lock:
+            action_available = self.manual_action_owner in (None, owner)
+        with self._mode_lock:
+            return action_available and self.mode_change_pending_index is None
+
+    def manual_action_reason(self, owner: str) -> str:
+        with self._mode_lock:
+            if self.mode_change_pending_index is not None:
+                return "Machine mode change is in progress"
+        with self._manual_action_lock:
+            active = self.manual_action_owner
+        if active is None or active == owner:
+            return ""
+        names = {
+            "Conveyor": "Conveyor manual action is not complete",
+            "Robot": "Robot manual action is not complete",
+            "Bowl": "Bowl dispense action is not complete",
+        }
+        return names.get(active, f"{active} manual action is not complete")
+
+    def _update_manual_action_completion(self, snapshot: dict) -> None:
+        """Release non-Robot actions only after their PLC feedback completes."""
+        with self._manual_action_lock:
+            owner = self.manual_action_owner
+            if owner == "Conveyor":
+                if self.conveyor_run_requested is False and snapshot["conveyor"][1] == 0:
+                    self.manual_action_owner = None
+            elif owner == "Bowl":
+                busy = bool(snapshot.get("bowl_dispenser_busy", False))
+                if busy:
+                    self._bowl_busy_seen = True
+                elif self._bowl_busy_seen:
+                    self.manual_action_owner = None
+                    self._bowl_busy_seen = False
+
     def toggle_mode(self) -> None:
         """Move the UI-only three-position selector back and forth."""
         modes = ("Manual", "Semi Auto", "Auto")
@@ -207,13 +301,111 @@ class HMIUI:
             self._mode_step_direction = -1
         self.set_mode(modes[current + self._mode_step_direction])
 
-    def show_emergency_stop_unconfigured(self) -> None:
-        """UI placeholder; no PLC command is sent until its mapping is confirmed."""
-        messagebox.showwarning(
-            "EMERGENCY STOP",
-            "Emergency Stop PLC command is not configured yet.",
-            parent=self.root,
+    def set_mode(self, mode: str) -> None:
+        value = MODE_TEXT_TO_VALUE.get(mode)
+        if value is not None:
+            self.request_machine_mode(value)
+
+    def request_machine_mode(self, mode: int) -> bool:
+        """Start one D1000~D1002 mode handshake and lock the selector."""
+        if mode not in MODE_VALUE_TO_TEXT:
+            return False
+        with self._mode_lock:
+            if self.mode_change_pending_index is not None:
+                return False
+            with self._manual_action_lock:
+                if self.manual_action_owner is not None:
+                    self._mode_notice = (
+                        "warning", "手動動作尚未完成，無法切換模式",
+                    )
+                    return False
+            if not self.snapshot.get("online", False) or not self.plc.connected:
+                self._mode_notice = ("error", "PLC 通訊中斷，無法切換模式")
+                return False
+            if mode == self._last_valid_machine_mode:
+                return True
+            result = self.command.send_machine_mode(mode)
+            if not result.ok:
+                self._mode_notice = ("error", result.message or "模式切換命令送出失敗")
+                return False
+            self.mode_change_pending_index = result.command_index
+            self.mode_change_target = mode
+            self._mode_change_started = time.monotonic()
+            self._mode_acknowledged = False
+            return True
+
+    def toggle_mode(self) -> None:
+        """Request the next selector position through the PLC."""
+        with self._mode_lock:
+            if self.mode_change_pending_index is not None:
+                return
+        modes = ("Manual", "Semi Auto", "Auto")
+        current = modes.index(self.machine_mode) if self.machine_mode in modes else 0
+        if current == 0:
+            self._mode_step_direction = 1
+        elif current == len(modes) - 1:
+            self._mode_step_direction = -1
+        self.request_machine_mode(
+            MODE_TEXT_TO_VALUE[modes[current + self._mode_step_direction]]
         )
+
+    def _finish_mode_change(self, notice: tuple[str, str] | None = None) -> None:
+        self.command.clear_machine_mode_command()
+        self.mode_change_pending_index = None
+        self.mode_change_target = None
+        self._mode_change_started = 0.0
+        self._mode_acknowledged = False
+        if notice is not None:
+            self._mode_notice = notice
+
+    def _update_machine_mode(self, raw_mode: int) -> str:
+        if raw_mode in MODE_VALUE_TO_TEXT:
+            self._last_valid_machine_mode = raw_mode
+            self.machine_mode = MODE_VALUE_TO_TEXT[raw_mode]
+            if raw_mode != MACHINE_MODE_MANUAL:
+                self.conveyor_run_requested = None
+            return ""
+        error = f"Invalid PLC Machine_Mode D1109 value: {raw_mode}"
+        LOGGER.warning(error)
+        return error
+
+    def _handle_mode_reply(self, ack_index, response_code) -> None:
+        with self._mode_lock:
+            pending = self.mode_change_pending_index
+            target = self.mode_change_target
+            if pending is None or target is None:
+                return
+            if ack_index == pending:
+                if response_code == 430:
+                    self._finish_mode_change((
+                        "warning", "機台運轉中或安全條件不符，無法切換模式",
+                    ))
+                    return
+                if response_code == MODE_SUCCESS_RESPONSE[target]:
+                    self._mode_acknowledged = True
+                elif response_code not in (None, 0):
+                    self._finish_mode_change((
+                        "error", f"模式切換失敗（Response {response_code}）",
+                    ))
+                    return
+            if self._mode_acknowledged and self._last_valid_machine_mode == target:
+                self._finish_mode_change()
+            elif time.monotonic() - self._mode_change_started >= MODE_COMMAND_TIMEOUT_SECONDS:
+                self._finish_mode_change(("error", "模式切換逾時，已恢復 PLC 實際模式"))
+
+    def set_hmi_emc(self, active: bool) -> bool:
+        """Write the HMI IPC emergency-stop request to D1004.0."""
+        if not self.plc.connected or not self.snapshot.get("online", False):
+            return False
+        value = (1 << HMI_EMC_BIT) if active else 0
+        if not self.command.write_d(HMI_EMC_WORD, value):
+            return False
+        self.hmi_emc_requested = bool(active)
+        self.snapshot = {
+            **self.snapshot,
+            "hmi_emc_requested": self.hmi_emc_requested,
+        }
+        return True
 
     def toggle_mock_alarm(self) -> None:
         """Mock 模式切換 D100.0，展示 Normal/Alarm 視覺效果。"""
@@ -237,14 +429,23 @@ class HMIUI:
             conveyor = self.plc.read_d(100, 13)
             plc_status = self.status.read_status()
             timeout_data = self.plc.read_d(CONVEYOR_TIMEOUT_WORD, 1)
-            if conveyor is None or timeout_data is None:
+            emc_data = self.plc.read_d(PLC_EMC_STATUS_WORD, 1)
+            mode_data = self.plc.read_d(PLC_MACHINE_MODE, 1)
+            if (conveyor is None or timeout_data is None or emc_data is None
+                    or mode_data is None):
                 if self._startup_grace_active():
                     self._publish_connecting()
                 else:
                     self._publish_offline()
             else:
+                machine_mode_error = self._update_machine_mode(mode_data[0])
+                self._handle_mode_reply(
+                    plc_status.ack_index if plc_status.ok else None,
+                    plc_status.response_code if plc_status.ok else None,
+                )
                 fault_word = conveyor[0]
                 timeout_word = timeout_data[0]
+                plc_emc_active = bool(emc_data[0] & (1 << PLC_EMC_ACTIVE_BIT))
                 comm_timeout = bool(timeout_word & 0x0001)
                 initialize_timeout = bool(timeout_word & 0x0002)
                 conveyor_rtu_online = not comm_timeout
@@ -267,6 +468,8 @@ class HMIUI:
                     alarms.append("Conveyor Communication Timeout")
                 if initialize_timeout:
                     alarms.append("Conveyor Initialize Timeout")
+                if plc_emc_active:
+                    alarms.append("PLC Emergency Stop")
                 if hb.ok and plc_status.ok:
                     self._startup_deadline = None
                 startup_grace = self._startup_grace_active()
@@ -276,6 +479,17 @@ class HMIUI:
                     alarms.append("PLC Status Read Error")
                 robot = plc_status.robot
                 robot_manual = plc_status.robot_manual
+                # D12100/D12102 are display/alarm sources only; they never
+                # interlock or decide whether CMD 40 may be sent.
+                if robot.read_ok:
+                    if robot.error_signal:
+                        alarms.append("Robot Error Signal")
+                    if robot.alarm_signal:
+                        alarms.append("Robot Alarm Signal")
+                    if robot.estop_active:
+                        alarms.append("Robot Emergency Stop")
+                    if robot.error_code not in (None, 0):
+                        alarms.append(f"Robot Error Code: {robot.error_code}")
                 if robot_manual.read_ok and robot_manual.alarm_code:
                     alarms.append(f"Robot Manual Alarm Code: {robot_manual.alarm_code}")
                 if (
@@ -295,9 +509,16 @@ class HMIUI:
                     "conveyor_state": conveyor_state,
                     "ack_index": plc_status.ack_index if plc_status.ok else "--",
                     "response_code": plc_status.response_code if plc_status.ok else "--",
+                    "machine_mode": self._last_valid_machine_mode,
+                    "machine_mode_error": machine_mode_error,
                     "ipc_online": self.snapshot.get("ipc_online", False),
-                    # Display only. D12100.1 must not interlock CMD 40.
-                    "arm_online": robot.status_output if robot.read_ok else None,
+                    "plc_emc_active": plc_emc_active,
+                    "hmi_emc_requested": self.hmi_emc_requested,
+                    # Current PLC/device conditions are separate from the HMI
+                    # alarm history latch that remains until CMD 6.
+                    "alarm_condition_active": bool(alarms),
+                    # D12100.0 is the approved Robot Online interlock/display.
+                    "arm_online": robot.busy if robot.read_ok else None,
                     "robot": robot,
                     "robot_manual": plc_status.robot_manual,
                     "bowl_dispenser_busy": plc_status.sensors.bowl_dispenser_busy,
@@ -310,6 +531,7 @@ class HMIUI:
                     },
                     "system": "Alarm" if self.active_alarms else "Normal",
                 }
+                self._update_manual_action_completion(self.snapshot)
             self._stop_event.wait(HEARTBEAT_INTERVAL)
 
     def _startup_grace_active(self) -> bool:
@@ -329,11 +551,20 @@ class HMIUI:
             "arm_online": None,
             "robot": None,
             "robot_manual": None,
+            "plc_emc_active": False,
+            "hmi_emc_requested": self.hmi_emc_requested,
+            "alarm_condition_active": False,
             "conveyor_state": "Unknown",
             "system": "Starting",
         }
 
     def _publish_offline(self) -> None:
+        with self._mode_lock:
+            if self.mode_change_pending_index is not None:
+                self.mode_change_pending_index = None
+                self.mode_change_target = None
+                self._mode_acknowledged = False
+                self._mode_notice = ("error", "PLC 通訊中斷，模式未切換")
         old = self.snapshot
         self.snapshot = {**old, "online": False, "heartbeat_ok": False,
                          "conveyor_rtu_online": False,
@@ -341,6 +572,9 @@ class HMIUI:
                          "arm_online": None,
                          "robot": None,
                          "robot_manual": None,
+                         "plc_emc_active": False,
+                         "hmi_emc_requested": self.hmi_emc_requested,
+                         "alarm_condition_active": True,
                          "bowl_dispenser_busy": False,
                          "sensors": {"bowl_drop_confirm": False, "pause_point_1": False,
                                      "pause_point_2": False, "right_stop_point": False,
@@ -401,6 +635,15 @@ class HMIUI:
         if hasattr(page, "update_global_status"):
             page.update_global_status()
         page.refresh()
+        with self._mode_lock:
+            notice = self._mode_notice
+            self._mode_notice = None
+        if notice is not None:
+            level, text = notice
+            if level == "warning":
+                messagebox.showwarning("MODE", text, parent=self.root)
+            else:
+                messagebox.showerror("MODE", text, parent=self.root)
         self.root.after(400, self._refresh_ui)
 
     def on_close(self) -> None:
