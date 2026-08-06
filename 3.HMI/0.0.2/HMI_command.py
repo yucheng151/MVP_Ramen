@@ -13,7 +13,8 @@ from HMI_plc_client import HMIPlcClient
 from register_map import (
     CMD_MODE_AUTO,
     CMD_MODE_MANUAL,
-    CMD_MODE_SEMI_AUTO,
+    CMD_SMALL_MATERIAL_FIRST,
+    CMD_SMALL_MATERIAL_LAST,
     HMI_CMD_CODE,
     HMI_CMD_INDEX,
     HMI_CMD_VALID,
@@ -21,7 +22,6 @@ from register_map import (
     HMI_ROBOT_ACTION_NO,
     MACHINE_MODE_AUTO,
     MACHINE_MODE_MANUAL,
-    MACHINE_MODE_SEMI_AUTO,
 )
 
 
@@ -165,11 +165,18 @@ class HMICommand:
         """送出一次落碗命令。"""
         return self.send_command(CMD_BOWL_DISPENSE, conveyor_speed=0)
 
+    def send_small_material_first(self) -> HMICommandResult:
+        """Send CMD 50 through the existing D1000~D1002 handshake."""
+        return self.send_command(CMD_SMALL_MATERIAL_FIRST, conveyor_speed=0)
+
+    def send_small_material_last(self) -> HMICommandResult:
+        """Send CMD 51 through the existing D1000~D1002 handshake."""
+        return self.send_command(CMD_SMALL_MATERIAL_LAST, conveyor_speed=0)
+
     def send_machine_mode(self, mode: int) -> HMICommandResult:
         """Issue one mode command through the existing D1000~D1002 handshake."""
         command_codes = {
             MACHINE_MODE_MANUAL: CMD_MODE_MANUAL,
-            MACHINE_MODE_SEMI_AUTO: CMD_MODE_SEMI_AUTO,
             MACHINE_MODE_AUTO: CMD_MODE_AUTO,
         }
         command_code = command_codes.get(mode)

@@ -6,6 +6,7 @@ from tkinter import messagebox
 from PIL import Image, ImageEnhance, ImageTk
 
 from register_map import SENSOR_BITS
+from process_overview_panel import ProcessOverviewPanel
 from ui_common import (
     BG, PANEL, PANEL_2, TEXT, MUTED, GREEN, RED, YELLOW, BLUE, GRAY,
     EmergencyStopButton, button_style, status_color,
@@ -28,7 +29,7 @@ HOTSPOTS = (
 
 
 class ModeSelectorKnob(tk.Frame):
-    """Three-position selector whose displayed state follows PLC D1109."""
+    """Two-position Manual/Auto selector whose state follows PLC D1109."""
 
     def __init__(self, parent, command):
         super().__init__(parent, width=105, height=98, bg=BG)
@@ -36,10 +37,6 @@ class ModeSelectorKnob(tk.Frame):
         asset_dir = Path(__file__).resolve().parent / "assets"
         self._manual_image = tk.PhotoImage(file=str(asset_dir / "mode_manual.png"))
         self._auto_image = tk.PhotoImage(file=str(asset_dir / "mode_auto.png"))
-        semi_source = Image.open(asset_dir / "mode_manual.png").convert("RGBA")
-        self._semi_image = ImageTk.PhotoImage(
-            semi_source.rotate(-45, resample=Image.Resampling.BICUBIC)
-        )
         self._button = tk.Button(
             self, image=self._manual_image, command=command,
             bg=BG, activebackground=BG, width=78, height=78,
@@ -55,8 +52,6 @@ class ModeSelectorKnob(tk.Frame):
     def set_mode(self, mode, switching=False):
         if mode == "Manual":
             image, text, color = self._manual_image, "MANUAL", YELLOW
-        elif mode == "Semi Auto":
-            image, text, color = self._semi_image, "SEMI AUTO", BLUE
         else:
             image, text, color = self._auto_image, "AUTO", GREEN
         self._button.configure(
@@ -253,7 +248,7 @@ class SideNavigation(tk.Frame):
         nav_items = (
             ("HOME", "HME", "Home", "MainPage"),
             ("ALARM", "ALM", "System", "AlarmPage"),
-            ("PLC COMM", "PLC", "PLC", "CommunicationPage"),
+            ("PLC / HMI COMM", "PLC", "PLC", "CommunicationPage"),
             ("IPC COMM", "IPC", "IPC", "IPCCommunicationPage"),
             ("ROBOT", "RBT", "Robot", "RobotPage"),
             ("CONVEYOR", "CNV", "Conveyor", "ConveyorControlPage"),
@@ -371,15 +366,18 @@ class MainPage(tk.Frame):
         self._side_nav = SideNavigation(self, app)
         self._side_nav.pack(side="left", fill="y", padx=(24, 6), pady=(6, 12))
 
-        self.canvas = tk.Canvas(self, bg="#070b0f", highlightthickness=1,
+        self.content = tk.Frame(self, bg=BG)
+        self.content.pack(fill="both", expand=True, padx=(0, 24), pady=6)
+        self.canvas = tk.Canvas(self.content, bg="#070b0f", highlightthickness=1,
                                 highlightbackground="#293945", bd=0)
-        self.canvas.pack(fill="both", expand=True, padx=(0, 24), pady=6)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.process_panel = ProcessOverviewPanel(self.content, app)
         self.canvas.bind("<Configure>", self._schedule_render)
         self._source = self._load_source()
 
         if app.mock_mode:
             tk.Button(self, text="Mock Alarm", command=app.toggle_mock_alarm,
-                      **button_style("#68404a")).place(relx=0.975, rely=0.16, anchor="ne")
+                      **button_style("#68404a")).place(relx=0.61, rely=0.16, anchor="ne")
 
     def _load_source(self):
         if not ASSET_PATH.exists():
@@ -437,6 +435,7 @@ class MainPage(tk.Frame):
                 continue
 
             box_w, box_h = 142, 48
+            x = max(box_w / 2 + 5, min(x, self.canvas.winfo_width() - box_w / 2 - 5))
             self.canvas.create_rectangle(x - box_w/2, y - box_h/2, x + box_w/2, y + box_h/2,
                                          fill="#111d26", outline=color, width=3 if state == "Alarm" else 1,
                                          tags=(tag, f"{tag}_bg", "hotspot"))
@@ -572,6 +571,15 @@ class MainPage(tk.Frame):
     def refresh(self):
         self._global_controls.refresh()
         self._side_nav.refresh()
+        show_process = self.app.machine_mode == "Auto"
+        if show_process and not self.process_panel.winfo_ismapped():
+            self.process_panel.pack(side="right", fill="y", padx=(8, 0))
+            self._schedule_render()
+        elif not show_process and self.process_panel.winfo_ismapped():
+            self.process_panel.pack_forget()
+            self._schedule_render()
+        if show_process:
+            self.process_panel.refresh()
         # 狀態更新時只重畫 overlay；尺寸改變則由 Configure 事件重建圖片。
         if self._photo:
             self.canvas.delete("hotspot")

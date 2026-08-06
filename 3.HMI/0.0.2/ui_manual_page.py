@@ -23,7 +23,6 @@ class ManualPage(BasePage):
         manual = self.app.machine_mode == "Manual"
         self.mode_label.configure(text=f"Mode: {self.app.machine_mode}")
         self.run_btn.configure(state="normal" if manual else "disabled")
-
     def switch_manual(self):
         if self.app.machine_mode == "Manual" or messagebox.askyesno("模式切換", "確定切換為 Manual 模式？"):
             self.app.set_mode("Manual")

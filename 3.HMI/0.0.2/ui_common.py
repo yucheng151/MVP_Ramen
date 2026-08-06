@@ -143,6 +143,7 @@ def status_color(value: str):
     return {
         "Normal": GREEN, "Ready": GREEN, "Online": GREEN, "Auto": GREEN,
         "Running": BLUE, "Stopping": YELLOW, "Manual": YELLOW, "Semi Auto": BLUE,
+        "Complete": GREEN, "Idle": YELLOW, "Rejected": RED,
         "Warning": YELLOW, "Busy": YELLOW,
         "Alarm": RED, "Timeout": RED, "Jam": RED, "Empty": RED,
         "Driver Offline": RED, "Low Material": YELLOW,

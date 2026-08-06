@@ -12,10 +12,16 @@ from tkinter import messagebox
 from config import HEARTBEAT_INTERVAL, PLC_IP, RECONNECT_DELAY
 from HMI_command import HMICommand
 from HMI_heartbeat import HMIHeartbeat
+from HMI_ipc_heartbeat import IPCHeartbeat
 from HMI_plc_client import HMIPlcClient
 from HMI_status import HMIStatus
 from mock_plc_client import MockHMIPlcClient
+from process_models import (
+    PROCESS_ALARM, PROCESS_COMPLETE, PROCESS_IDLE, PROCESS_RUNNING,
+    PROCESS_STEPS, ProcessAlarm, ProcessSnapshot, lock_recipe,
+)
 from register_map import (
+    CONVEYOR_SET_SPEED_WRITE,
     CONVEYOR_TIMEOUT_WORD,
     FAULT_NAMES,
     HMI_EMC_BIT,
@@ -23,8 +29,8 @@ from register_map import (
     PLC_EMC_ACTIVE_BIT,
     PLC_EMC_STATUS_WORD,
     PLC_MACHINE_MODE,
+    PLC_MAIN_PROCESS_STEP,
     MACHINE_MODE_MANUAL,
-    MACHINE_MODE_SEMI_AUTO,
     MACHINE_MODE_AUTO,
 )
 from ui_common import BG
@@ -39,14 +45,12 @@ PLC_STARTUP_GRACE_SECONDS = 8.0
 MODE_COMMAND_TIMEOUT_SECONDS = 8.0
 MODE_VALUE_TO_TEXT = {
     MACHINE_MODE_MANUAL: "Manual",
-    MACHINE_MODE_SEMI_AUTO: "Semi Auto",
     MACHINE_MODE_AUTO: "Auto",
 }
 MODE_TEXT_TO_VALUE = {text: value for value, text in MODE_VALUE_TO_TEXT.items()}
 MODE_SUCCESS_RESPONSE = {
     MACHINE_MODE_MANUAL: 300,
-    MACHINE_MODE_SEMI_AUTO: 301,
-    MACHINE_MODE_AUTO: 302,
+    MACHINE_MODE_AUTO: 301,
 }
 LOGGER = logging.getLogger(__name__)
 
@@ -64,10 +68,12 @@ class HMIUI:
 
         self.plc = MockHMIPlcClient(ip="MOCK") if mock else HMIPlcClient(ip=ip)
         self.heartbeat = HMIHeartbeat(self.plc)
+        self.ipc_heartbeat = IPCHeartbeat(self.plc)
         self.command = HMICommand(self.plc)
         self.status = HMIStatus(self.plc)
         # The display mode is updated only from PLC D1109 after startup.
         self._last_valid_machine_mode = MACHINE_MODE_MANUAL
+        self._last_valid_process_step = 0
         self._mode_step_direction = 1
         self._mode_lock = threading.RLock()
         self.mode_change_pending_index: int | None = None
@@ -81,6 +87,7 @@ class HMIUI:
         self._bowl_busy_seen = False
         self.conveyor_run_requested: bool | None = None
         self.hmi_emc_requested = False
+        self.recipe_snapshot = None
         self.snapshot = self._empty_snapshot()
         self.active_alarms: dict[str, datetime] = {}
         self._alarm_started: dict[str, datetime] = {}
@@ -178,7 +185,15 @@ class HMIUI:
                 "conveyor_rtu_online": False, "conveyor_state": "Unknown", "system": "Starting",
                 "conveyor_timeout_word": 0, "ack_index": "--", "response_code": "--",
                 "machine_mode": MACHINE_MODE_MANUAL, "machine_mode_error": "",
+                "process": ProcessSnapshot(),
                 "ipc_online": False,
+                "ipc_plc_index": None,
+                "ipc_return_index": None,
+                "ipc_plc_comm_normal": False,
+                "ipc_status_word": None,
+                "ipc_status_message": "--",
+                "ipc_execution_status": "Offline",
+                "ipc_last_result": "--",
                 "plc_emc_active": False,
                 "hmi_emc_requested": False,
                 "alarm_condition_active": False,
@@ -293,13 +308,7 @@ class HMIUI:
 
     def toggle_mode(self) -> None:
         """Move the UI-only three-position selector back and forth."""
-        modes = ("Manual", "Semi Auto", "Auto")
-        current = modes.index(self.machine_mode) if self.machine_mode in modes else 0
-        if current == 0:
-            self._mode_step_direction = 1
-        elif current == len(modes) - 1:
-            self._mode_step_direction = -1
-        self.set_mode(modes[current + self._mode_step_direction])
+        self.set_mode("Auto" if self.machine_mode == "Manual" else "Manual")
 
     def set_mode(self, mode: str) -> None:
         value = MODE_TEXT_TO_VALUE.get(mode)
@@ -312,6 +321,10 @@ class HMIUI:
             return False
         with self._mode_lock:
             if self.mode_change_pending_index is not None:
+                return False
+            process = self.snapshot.get("process")
+            if process is not None and process.status == PROCESS_RUNNING:
+                self._mode_notice = ("warning", "流程執行中，無法切換模式")
                 return False
             with self._manual_action_lock:
                 if self.manual_action_owner is not None:
@@ -334,20 +347,57 @@ class HMIUI:
             self._mode_acknowledged = False
             return True
 
+    def start_auto_process(self, recipe: dict) -> tuple[bool, str]:
+        """Start Mock auto flow; real PLC remains blocked until mapping is assigned."""
+        process = self.snapshot.get("process")
+        if self.machine_mode != "Auto":
+            return False, "Please switch to AUTO mode"
+        if self.active_alarms or (process and process.status == PROCESS_ALARM):
+            return False, "Active alarm must be reset before automatic start"
+        if process and process.status == PROCESS_RUNNING:
+            return False, "A process is already running"
+        self.recipe_snapshot = lock_recipe(recipe)
+        if not self.mock_mode:
+            return False, "PLC register mapping is not assigned; no command was written"
+        return self.plc.start_auto_process(self.recipe_snapshot)
+
+    def write_auto_parameters(self, recipe: dict) -> tuple[bool, str]:
+        """Write the assigned Auto parameter registers without starting production."""
+        if self.machine_mode != "Auto":
+            return False, "Please switch to AUTO mode"
+        process = self.snapshot.get("process")
+        if self.active_alarms or (process and process.status == PROCESS_ALARM):
+            return False, "Active alarm must be reset before writing parameters"
+        if process and process.status == PROCESS_RUNNING:
+            return False, "Cannot change parameters while a process is running"
+        try:
+            conveyor_speed = int(recipe["conveyor_speed_rpm"])
+            cook_time = int(recipe["cook_time_sec"])
+        except (KeyError, TypeError, ValueError):
+            return False, "Parameters must be valid integers"
+        if conveyor_speed <= 0 or cook_time <= 0:
+            return False, "Conveyor Speed and Cook Time must be greater than 0"
+
+        if self.mock_mode:
+            ok, message = self.plc.write_auto_parameters(recipe)
+        else:
+            ok = self.command.write_d(CONVEYOR_SET_SPEED_WRITE, conveyor_speed)
+            message = (
+                f"Conveyor Speed {conveyor_speed} RPM written to D108. "
+                "Cook Time is HMI-only until PLC assigns its register."
+                if ok else "Failed to write Conveyor Speed to D108"
+            )
+        if ok:
+            self.recipe_snapshot = lock_recipe(recipe)
+        return ok, message
+
     def toggle_mode(self) -> None:
         """Request the next selector position through the PLC."""
         with self._mode_lock:
             if self.mode_change_pending_index is not None:
                 return
-        modes = ("Manual", "Semi Auto", "Auto")
-        current = modes.index(self.machine_mode) if self.machine_mode in modes else 0
-        if current == 0:
-            self._mode_step_direction = 1
-        elif current == len(modes) - 1:
-            self._mode_step_direction = -1
-        self.request_machine_mode(
-            MODE_TEXT_TO_VALUE[modes[current + self._mode_step_direction]]
-        )
+        target = MACHINE_MODE_AUTO if self.machine_mode == "Manual" else MACHINE_MODE_MANUAL
+        self.request_machine_mode(target)
 
     def _finish_mode_change(self, notice: tuple[str, str] | None = None) -> None:
         self.command.clear_machine_mode_command()
@@ -375,6 +425,7 @@ class HMIUI:
             target = self.mode_change_target
             if pending is None or target is None:
                 return
+
             if ack_index == pending:
                 if response_code == 430:
                     self._finish_mode_change((
@@ -382,15 +433,21 @@ class HMIUI:
                     ))
                     return
                 if response_code == MODE_SUCCESS_RESPONSE[target]:
-                    self._mode_acknowledged = True
+                    # The PLC currently does not publish mode through D1109.
+                    # A matched ACK plus response 300/301 is the authoritative
+                    # completion signal for Manual/Auto selection.
+                    self._last_valid_machine_mode = target
+                    self.machine_mode = MODE_VALUE_TO_TEXT[target]
+                    if target != MACHINE_MODE_MANUAL:
+                        self.conveyor_run_requested = None
+                    self._finish_mode_change()
+                    return
                 elif response_code not in (None, 0):
                     self._finish_mode_change((
                         "error", f"模式切換失敗（Response {response_code}）",
                     ))
                     return
-            if self._mode_acknowledged and self._last_valid_machine_mode == target:
-                self._finish_mode_change()
-            elif time.monotonic() - self._mode_change_started >= MODE_COMMAND_TIMEOUT_SECONDS:
+            if time.monotonic() - self._mode_change_started >= MODE_COMMAND_TIMEOUT_SECONDS:
                 self._finish_mode_change(("error", "模式切換逾時，已恢復 PLC 實際模式"))
 
     def set_hmi_emc(self, active: bool) -> bool:
@@ -426,19 +483,24 @@ class HMIUI:
                 continue
 
             hb = self.heartbeat.tick()
+            ipc_hb = self.ipc_heartbeat.tick()
             conveyor = self.plc.read_d(100, 13)
             plc_status = self.status.read_status()
             timeout_data = self.plc.read_d(CONVEYOR_TIMEOUT_WORD, 1)
             emc_data = self.plc.read_d(PLC_EMC_STATUS_WORD, 1)
-            mode_data = self.plc.read_d(PLC_MACHINE_MODE, 1)
+            process_step_data = (
+                [0] if self.mock_mode else self.plc.read_d(PLC_MAIN_PROCESS_STEP, 1)
+            )
             if (conveyor is None or timeout_data is None or emc_data is None
-                    or mode_data is None):
+                    or process_step_data is None):
                 if self._startup_grace_active():
                     self._publish_connecting()
                 else:
                     self._publish_offline()
             else:
-                machine_mode_error = self._update_machine_mode(mode_data[0])
+                # D1109 is currently not implemented by the PLC.  Mode is
+                # updated only by a matched mode-command ACK/response.
+                machine_mode_error = ""
                 self._handle_mode_reply(
                     plc_status.ack_index if plc_status.ok else None,
                     plc_status.response_code if plc_status.ok else None,
@@ -464,6 +526,39 @@ class HMIUI:
                 else:
                     conveyor_state = "Ready"
                 alarms = [FAULT_NAMES[bit] for bit in range(9) if fault_word & (1 << bit)]
+                process = (
+                    self.plc.get_process_snapshot()
+                    if self.mock_mode
+                    else self.snapshot.get("process", ProcessSnapshot())
+                )
+                if not self.mock_mode:
+                    raw_step = process_step_data[0]
+                    valid_steps = {step for step, _name in PROCESS_STEPS}
+                    if raw_step in valid_steps:
+                        self._last_valid_process_step = raw_step
+                    else:
+                        LOGGER.warning(
+                            "Invalid PLC Main Process Step D1400 value: %s; "
+                            "keeping %s",
+                            raw_step, self._last_valid_process_step,
+                        )
+                    process.step = self._last_valid_process_step
+                    process.mapping_ready = True
+                    if process.step == 0:
+                        process.status = PROCESS_IDLE
+                    elif process.step == 90:
+                        process.status = PROCESS_COMPLETE
+                    else:
+                        process.status = PROCESS_RUNNING
+                process.mode = self._last_valid_machine_mode
+                # Mock owns a native process alarm. On a real PLC the process
+                # alarm below is derived from active alarms, so feeding it back
+                # here would recursively create "Process ... Process ..." text.
+                if self.mock_mode and process.alarm.latched:
+                    alarms.append(
+                        f"Process {process.alarm.source}: {process.alarm.message} "
+                        f"(Code {process.alarm.code})"
+                    )
                 if comm_timeout:
                     alarms.append("Conveyor Communication Timeout")
                 if initialize_timeout:
@@ -477,6 +572,8 @@ class HMIUI:
                     alarms.append("PLC Communication Timeout")
                 if not plc_status.ok and not startup_grace:
                     alarms.append("PLC Status Read Error")
+                if not ipc_hb.ok and not startup_grace:
+                    alarms.append("IPC Communication Timeout")
                 robot = plc_status.robot
                 robot_manual = plc_status.robot_manual
                 # D12100/D12102 are display/alarm sources only; they never
@@ -499,6 +596,19 @@ class HMIUI:
                 ):
                     alarms.append(f"Robot Manual Result Code: {robot_manual.result_code}")
                 self._update_alarms(alarms)
+                if not self.mock_mode:
+                    if self.active_alarms:
+                        alarm_name, occurred_at = next(iter(self.active_alarms.items()))
+                        source = self._alarm_source(alarm_name)
+                        process.status = PROCESS_ALARM
+                        process.alarm = ProcessAlarm(
+                            step=process.step, source=source, message=alarm_name,
+                            code=0, suggestion="Clear the device condition, then press ALM RST",
+                            occurred_at=occurred_at, latched=True,
+                        )
+                    elif process.alarm.latched:
+                        process.alarm = ProcessAlarm()
+                        process.status = PROCESS_IDLE
                 self.snapshot = {
                     "online": True, "heartbeat_ok": hb.ok,
                     "plc_index": hb.plc_index, "return_index": hb.return_index,
@@ -511,7 +621,15 @@ class HMIUI:
                     "response_code": plc_status.response_code if plc_status.ok else "--",
                     "machine_mode": self._last_valid_machine_mode,
                     "machine_mode_error": machine_mode_error,
-                    "ipc_online": self.snapshot.get("ipc_online", False),
+                    "process": process,
+                    "ipc_online": ipc_hb.ok,
+                    "ipc_plc_index": ipc_hb.plc_index,
+                    "ipc_return_index": ipc_hb.return_index,
+                    "ipc_plc_comm_normal": ipc_hb.plc_comm_normal,
+                    "ipc_status_word": ipc_hb.status_word,
+                    "ipc_status_message": ipc_hb.message,
+                    "ipc_execution_status": ipc_hb.execution_status,
+                    "ipc_last_result": ipc_hb.last_result,
                     "plc_emc_active": plc_emc_active,
                     "hmi_emc_requested": self.hmi_emc_requested,
                     # Current PLC/device conditions are separate from the HMI
@@ -539,6 +657,21 @@ class HMIUI:
             self._startup_deadline is not None
             and time.monotonic() < self._startup_deadline
         )
+
+    @staticmethod
+    def _alarm_source(name: str) -> str:
+        text = name.lower()
+        if "emergency" in text or "emc" in text:
+            return "EMC"
+        if "conveyor" in text or any(item.lower() in text for item in FAULT_NAMES):
+            return "Conveyor"
+        if "robot" in text:
+            return "Nashi Robot"
+        if "ipc" in text:
+            return "Robot IPC Communication"
+        if "communication" in text or "plc" in text:
+            return "HMI Communication"
+        return "Machine"
 
     def _publish_connecting(self) -> None:
         """Show startup connection progress without creating a latched alarm."""
