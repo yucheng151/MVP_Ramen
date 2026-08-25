@@ -1,0 +1,31 @@
+{
+  "next_unit_id": 1001,
+  "cabinets": [
+    {"no": 1, "quantity": 0, "capacity": 20},
+    {"no": 2, "quantity": 0, "capacity": 20},
+    {"no": 3, "quantity": 0, "capacity": 20},
+    {"no": 4, "quantity": 0, "capacity": 20},
+    {"no": 5, "quantity": 0, "capacity": 20},
+    {"no": 6, "quantity": 0, "capacity": 20},
+    {"no": 7, "quantity": 0, "capacity": 20},
+    {"no": 8, "quantity": 0, "capacity": 20},
+    {"no": 9, "quantity": 0, "capacity": 20},
+    {"no": 10, "quantity": 0, "capacity": 20}
+  ],
+  "empty_box_bins": [
+    {"no": 1, "quantity": 0, "capacity": 20},
+    {"no": 2, "quantity": 0, "capacity": 20}
+  ],
+  "orders": [],
+  "baskets": [
+    {"no": 1, "state": "Idle", "unit_id": null, "cabinet_no": null},
+    {"no": 2, "state": "Idle", "unit_id": null, "cabinet_no": null},
+    {"no": 3, "state": "Idle", "unit_id": null, "cabinet_no": null}
+  ],
+  "stations": [
+    {"no": 1, "name": "落碗", "state": "Idle", "unit_id": null},
+    {"no": 2, "name": "放麵 & UR1", "state": "Idle", "unit_id": null},
+    {"no": 3, "name": "UR2", "state": "Idle", "unit_id": null},
+    {"no": 4, "name": "注湯 & 完成", "state": "Idle", "unit_id": null}
+  ]
+}

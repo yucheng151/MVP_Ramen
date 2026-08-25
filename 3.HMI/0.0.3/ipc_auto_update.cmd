@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 set "GIT=C:\Program Files\Git\cmd\git.exe"
 set "LOG=%~dp0logs\ipc_auto_update.log"
-set "REMOTE=https://github.com/yucheng151/MVP_Ramen_HMI_0.0.2.git"
+set "REMOTE=https://github.com/yucheng151/MVP_Ramen.git"
 
 if not exist "%~dp0logs" mkdir "%~dp0logs"
 
@@ -23,24 +23,25 @@ if not exist "%GIT%" (
     exit /b 1
 )
 
-if not exist ".git" (
-    echo [%date% %time%] ERROR: This folder is not a Git repository.>>"%LOG%"
+for /f "delims=" %%R in ('"%GIT%" rev-parse --show-toplevel 2^>nul') do set "REPO_ROOT=%%R"
+if not defined REPO_ROOT (
+    echo [%date% %time%] ERROR: This HMI was not installed with git clone.>>"%LOG%"
     exit /b 1
 )
 
-"%GIT%" config --global --add safe.directory "%CD%" >>"%LOG%" 2>&1
-"%GIT%" remote set-url origin "%REMOTE%" >>"%LOG%" 2>&1
+"%GIT%" config --global --add safe.directory "%REPO_ROOT%" >>"%LOG%" 2>&1
+"%GIT%" -C "%REPO_ROOT%" remote set-url origin "%REMOTE%" >>"%LOG%" 2>&1
 if errorlevel 1 (
-    "%GIT%" remote add origin "%REMOTE%" >>"%LOG%" 2>&1
+    "%GIT%" -C "%REPO_ROOT%" remote add origin "%REMOTE%" >>"%LOG%" 2>&1
 )
 
-"%GIT%" fetch origin main >>"%LOG%" 2>&1
+"%GIT%" -C "%REPO_ROOT%" fetch origin main >>"%LOG%" 2>&1
 if errorlevel 1 (
     echo [%date% %time%] ERROR: Unable to fetch from GitHub.>>"%LOG%"
     exit /b 1
 )
 
-"%GIT%" merge --ff-only origin/main >>"%LOG%" 2>&1
+"%GIT%" -C "%REPO_ROOT%" merge --ff-only origin/main >>"%LOG%" 2>&1
 if errorlevel 1 (
     echo [%date% %time%] ERROR: Update stopped because the IPC copy has local changes.>>"%LOG%"
     exit /b 1

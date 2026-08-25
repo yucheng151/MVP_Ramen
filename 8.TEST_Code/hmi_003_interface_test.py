@@ -65,7 +65,11 @@ def run() -> None:
         for tab_id in auto_page.tabs.tabs():
             auto_page.tabs.select(tab_id)
             app.root.update_idletasks()
-        check(len(auto_page.tabs.tabs()) == 6, "AUTO SYSTEM分頁不是6個")
+        check(len(auto_page.tabs.tabs()) == 7, "AUTO SYSTEM分頁不是7個（含運行LOG）")
+        check(
+            hasattr(auto_page, "plc_debug_log_tree"),
+            "AUTO SYSTEM缺少PLC Debug LOG檢視表",
+        )
         check(len(auto_page.sim_live_station_labels) == 4, "模擬工作台不是四站顯示")
         check(len(auto_page.sim_station_buttons) == 5, "模擬工作台缺少站點控制")
         check(auto_page._cabinet_source is not None, "麵櫃底圖沒有載入")

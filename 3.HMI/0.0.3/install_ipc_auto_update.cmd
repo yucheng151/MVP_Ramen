@@ -2,12 +2,12 @@
 setlocal
 cd /d "%~dp0"
 
-echo [1/2] Connecting this IPC to the private GitHub repository...
+echo [1/2] Connecting this IPC to the MVP_Ramen Git repository...
 call "%~dp0ipc_auto_update.cmd"
 if errorlevel 1 (
     echo.
     echo ERROR: Initial GitHub update failed.
-    echo Complete the GitHub sign-in window, then run this file again.
+    echo Check the GitHub/network access, then run this file again.
     pause
     exit /b 1
 )

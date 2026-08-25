@@ -7,4 +7,3 @@ command = Chr(34) & fileSystem.BuildPath(scriptFolder, "ipc_auto_update.cmd") & 
 
 Set shell = CreateObject("WScript.Shell")
 shell.Run command, 0, True
-
