@@ -1,0 +1,13 @@
+{
+  "result": "FAIL",
+  "failure": "完成逾时 UnitID=138685305 Cycle=307",
+  "started_at": "2026-08-23T06:44:44",
+  "finished_at": "2026-08-23T08:19:55",
+  "elapsed_seconds": 5710.7,
+  "target_orders": 1000,
+  "submitted_orders": 320,
+  "completed_orders": 304,
+  "last_completed_unit_id": 138685304,
+  "log_file": "C:\\Users\\Administrator\\Desktop\\ITRI\\MVP_Ramen\\8.TEST_Code\\logs\\pipeline_1000_20260823_064444.log",
+  "csv_file": "C:\\Users\\Administrator\\Desktop\\ITRI\\MVP_Ramen\\8.TEST_Code\\logs\\pipeline_1000_20260823_064444.csv"
+}

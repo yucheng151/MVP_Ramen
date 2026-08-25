@@ -1,0 +1,27 @@
+Class	Identifiers	Address	Type	Initial Value	Comment
+VAR	PLCtoHMI_AutoMonitorMagic	D8100	WORD		固定16#A55A，HMI確認精確監看區有效
+VAR	PLCtoHMI_AutoMonitorVersion	D8101	INT		目前版本固定1
+VAR	PLCtoHMI_Station10UnitID	D8102	DINT		落碗或前往站20的碗編號
+VAR	PLCtoHMI_Station10BowlState	D8104	INT		站10碗狀態10或15
+VAR	PLCtoHMI_Station20UnitID	D8105	DINT		倒麵與UR1站的碗編號
+VAR	PLCtoHMI_Station20BowlState	D8107	INT		站20碗狀態20或25
+VAR	PLCtoHMI_Station30UnitID	D8108	DINT		UR2站的碗編號
+VAR	PLCtoHMI_Station30BowlState	D8110	INT		站30碗狀態30或35
+VAR	PLCtoHMI_Station40UnitID	D8111	DINT		注湯與完成站的碗編號
+VAR	PLCtoHMI_Station40BowlState	D8113	INT		站40碗狀態40
+VAR	PLCtoHMI_Basket1UnitID	D8114	DINT		麵篩1綁定的碗編號
+VAR	PLCtoHMI_Basket1State	D8116	INT		麵篩1狀態
+VAR	PLCtoHMI_Basket1CabinetNo	D8117	INT		麵篩1使用的麵櫃編號
+VAR	PLCtoHMI_Basket2UnitID	D8118	DINT		麵篩2綁定的碗編號
+VAR	PLCtoHMI_Basket2State	D8120	INT		麵篩2狀態
+VAR	PLCtoHMI_Basket2CabinetNo	D8121	INT		麵篩2使用的麵櫃編號
+VAR	PLCtoHMI_Basket3UnitID	D8122	DINT		麵篩3綁定的碗編號
+VAR	PLCtoHMI_Basket3State	D8124	INT		麵篩3狀態
+VAR	PLCtoHMI_Basket3CabinetNo	D8125	INT		麵篩3使用的麵櫃編號
+VAR	PLCtoHMI_AutoActiveFlags	D8126	WORD		Bit0 Idle 1下鍋允許 2Nachi忙 3區域鎖定 4甩麵允許 5倒麵允許 6UR1動作 7UR2動作 8輸送帶要求 9注湯要求
+VAR	PLCtoHMI_AutoNoodleActionStep	D8127	INT		Nachi全自動動作步驟，暫時可填0
+VAR	PLCtoHMI_AutoIPCActionStep	D8128	INT		IPC全自動動作步驟，暫時可填0
+VAR	PLCtoHMI_AutoRightmostStation	D8129	INT		最右端尚未完成的碗狀態
+VAR	PLCtoHMI_AutoFIFOCount	D8130	INT		PLC訂單FIFO目前數量
+VAR	PLCtoHMI_AutoCompleteUnitID	D8131	DINT		最後完成的碗編號
+VAR	PLCtoHMI_AutoCompleteIndex	D8133	DWORD		完成流水號

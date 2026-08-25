@@ -1,0 +1,20 @@
+; Copyright(c) 2001 NACHI-Fujikoshi corporation. All Rights Reserved.
+;------------------------------------------------------------------------
+
+[UNIT_HEADER]
+FILENAME= UNIT.INI
+VER= 1.00.00
+DATE= 12/25/2001
+EMESS= This is the default file for a unit(UnitconsList).
+JMESS= ユニット用管理初期値ファイルです。
+
+[UNIT_LIST]
+UNIT1=U00UNIT001.CON
+UNIT2=
+UNIT3=
+UNIT4=
+UNIT5=
+UNIT6=
+UNIT7=
+UNIT8=
+UNIT9=

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17120f">
+  <title>職人拉麵｜手機點餐</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="brand-mark" aria-hidden="true">麵</div>
+    <div>
+      <p class="eyebrow">RAMEN STATION</p>
+      <h1>職人拉麵</h1>
+      <p class="subtitle">現點現煮，一次製作一碗</p>
+    </div>
+  </header>
+
+  <main>
+    <section id="menu-view" class="view active" aria-labelledby="menu-title">
+      <div class="section-heading">
+        <div>
+          <p class="step-label">STEP 1</p>
+          <h2 id="menu-title">選擇餐點</h2>
+        </div>
+        <span class="availability"><i></i> 今日供應中</span>
+      </div>
+
+      <article class="menu-card">
+        <div class="ramen-art" aria-hidden="true">
+          <div class="steam steam-a"></div><div class="steam steam-b"></div><div class="steam steam-c"></div>
+          <div class="bowl"><span>拉麵</span></div>
+        </div>
+        <div class="menu-copy">
+          <p class="badge">本店招牌</p>
+          <h3>經典豚骨拉麵</h3>
+          <p>濃郁豚骨湯頭、叉燒、溏心蛋與新鮮蔥花</p>
+          <div class="price"><span>NT$</span> 180</div>
+        </div>
+      </article>
+
+      <div class="option-block">
+        <h3>麵條硬度</h3>
+        <div class="segmented" role="radiogroup" aria-label="麵條硬度">
+          <label><input type="radio" name="noodle" value="偏硬"><span>偏硬</span></label>
+          <label><input type="radio" name="noodle" value="正常" checked><span>正常</span></label>
+          <label><input type="radio" name="noodle" value="偏軟"><span>偏軟</span></label>
+        </div>
+      </div>
+
+      <div class="option-block quantity-block">
+        <div>
+          <h3>數量</h3>
+          <p>同一張訂單可點多碗</p>
+        </div>
+        <div class="quantity-control" aria-label="餐點數量">
+          <button id="decrease-quantity" type="button" aria-label="減少一碗">−</button>
+          <output id="quantity" aria-live="polite">1</output>
+          <button id="increase-quantity" type="button" aria-label="增加一碗">＋</button>
+        </div>
+      </div>
+
+      <div class="notice"><strong>訂單可包含多碗</strong><span>機台將依序製作</span></div>
+      <button id="review-button" class="primary-button" type="button">確認餐點 <span id="menu-total">NT$ 180</span></button>
+    </section>
+
+    <section id="review-view" class="view" aria-labelledby="review-title">
+      <button class="back-button" data-back="menu-view" type="button">← 返回修改</button>
+      <p class="step-label">STEP 2</p>
+      <h2 id="review-title">確認訂單</h2>
+      <div class="receipt">
+        <div class="receipt-row main-item"><div><strong>經典豚骨拉麵</strong><small id="review-noodle">麵條：正常</small></div><span>NT$ 180</span></div>
+        <div class="receipt-row"><span>數量</span><strong id="review-quantity">1 碗</strong></div>
+        <div class="divider"></div>
+        <div class="receipt-row total"><span>合計</span><strong id="review-total">NT$ 180</strong></div>
+      </div>
+      <label class="field-label" for="pickup-name">取餐稱呼（選填）</label>
+      <input id="pickup-name" class="text-field" maxlength="20" autocomplete="name" placeholder="例如：王先生">
+      <button id="submit-button" class="primary-button" type="button">送出訂單</button>
+      <p id="submit-error" class="error-message" role="alert"></p>
+    </section>
+
+    <section id="success-view" class="view success" aria-labelledby="success-title">
+      <div class="success-icon">✓</div>
+      <p class="step-label">ORDER RECEIVED</p>
+      <h2 id="success-title">訂單已送出</h2>
+      <p>請記住您的取餐號碼</p>
+      <div id="order-number" class="order-number">A001</div>
+      <p id="success-quantity" class="success-quantity">本訂單共 1 碗</p>
+      <div class="status-card"><span class="status-dot"></span><div><small>目前狀態</small><strong>等待製作</strong></div></div>
+      <p class="success-note">拉麵將依序製作，完成後請依號碼取餐。</p>
+      <button id="new-order-button" class="secondary-button" type="button">返回點餐首頁</button>
+    </section>
+  </main>
+
+  <footer>由智慧拉麵系統提供服務</footer>
+  <script src="app.js"></script>
+</body>
+</html>

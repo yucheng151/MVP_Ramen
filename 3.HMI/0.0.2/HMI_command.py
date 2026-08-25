@@ -13,6 +13,8 @@ from HMI_plc_client import HMIPlcClient
 from register_map import (
     CMD_MODE_AUTO,
     CMD_MODE_MANUAL,
+    CMD_MODE_SEMI_AUTO,
+    CMD_SEMI_AUTO_SINGLE,
     CMD_SMALL_MATERIAL_FIRST,
     CMD_SMALL_MATERIAL_LAST,
     HMI_CMD_CODE,
@@ -20,8 +22,11 @@ from register_map import (
     HMI_CMD_VALID,
     HMI_CONVEYOR_SPEED,
     HMI_ROBOT_ACTION_NO,
+    HMI_TEST_STEP_MASK,
     MACHINE_MODE_AUTO,
     MACHINE_MODE_MANUAL,
+    MACHINE_MODE_SEMI_AUTO,
+    SEMI_AUTO_TEST_MASK_ALL,
 )
 
 
@@ -173,10 +178,53 @@ class HMICommand:
         """Send CMD 51 through the existing D1000~D1002 handshake."""
         return self.send_command(CMD_SMALL_MATERIAL_LAST, conveyor_speed=0)
 
+    def send_semi_auto_test(self, step_mask: int) -> HMICommandResult:
+        """Write D1014, then send CMD 60 through the shared handshake."""
+        step_mask = int(step_mask)
+        if step_mask == 0 or step_mask & ~SEMI_AUTO_TEST_MASK_ALL:
+            self.last_error = "Select at least one valid semi-auto test action"
+            return HMICommandResult(
+                False, CMD_SEMI_AUTO_SINGLE,
+                self.last_command_index, 0, self.last_error,
+            )
+        if not self.plc.connected:
+            self.last_error = "PLC Offline"
+            return HMICommandResult(
+                False, CMD_SEMI_AUTO_SINGLE,
+                self.last_command_index, 0, self.last_error,
+            )
+        command_code = CMD_SEMI_AUTO_SINGLE
+        command_index = self.next_command_index()
+        with self.plc.lock:
+            if not self.write_d(D_HMI_TO_PLC_CMD_VALID, 0):
+                return HMICommandResult(
+                    False, command_code, command_index, 0,
+                    self.last_error or "Cannot clear Command Valid",
+                )
+            if not self.write_d(HMI_TEST_STEP_MASK, step_mask):
+                return HMICommandResult(
+                    False, command_code, command_index, 0,
+                    self.last_error or "Cannot write D1014 TestStepMask",
+                )
+            if not self.write_d(D_HMI_TO_PLC_CMD_CODE, command_code):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot write Command Code")
+            if not self.write_d(D_HMI_TO_PLC_CONVEYOR_SPEED, 0):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot clear Conveyor Speed")
+            if not self.write_d(D_HMI_TO_PLC_CMD_INDEX, command_index):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot write Command Index")
+            if not self.write_d(D_HMI_TO_PLC_CMD_VALID, 1):
+                return HMICommandResult(False, command_code, command_index, 0,
+                                        self.last_error or "Cannot set Command Valid")
+        return HMICommandResult(True, command_code, command_index, 0, "OK")
+
     def send_machine_mode(self, mode: int) -> HMICommandResult:
         """Issue one mode command through the existing D1000~D1002 handshake."""
         command_codes = {
             MACHINE_MODE_MANUAL: CMD_MODE_MANUAL,
+            MACHINE_MODE_SEMI_AUTO: CMD_MODE_SEMI_AUTO,
             MACHINE_MODE_AUTO: CMD_MODE_AUTO,
         }
         command_code = command_codes.get(mode)
@@ -228,12 +276,12 @@ class HMICommand:
         valid = (
             action_no == 1
             and 1 <= noodle_cabinet_no <= 10
-            and 1 <= cut_no <= 6
+            and 1 <= cut_no <= 3
             and 1 <= output_cabinet_no <= 2
         ) or (
             action_no == 2
             and noodle_cabinet_no == 0
-            and 1 <= cut_no <= 6
+            and 1 <= cut_no <= 3
             and output_cabinet_no == 0
         )
         if not valid:

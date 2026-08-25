@@ -1,0 +1,25 @@
+; Copyright(c) 2001 NACHI-Fujikoshi corporation. All Rights Reserved.
+;------------------------------------------------------------------------
+
+[ACAL_HEADER]
+FILENAME=C00AUTOCAL.CON
+VER= 1.00.00
+DATE= 3/12/2003
+EMESS= This is the default file for Auto Calibration system constant.
+JMESS= 自動ｷｬﾘﾌﾞﾚｰｼｮﾝ（システム共通の設定）用初期値ファイルです。
+PROTECT=0x0
+
+[ACAL_OPERATION]
+ACAL_CARTECIEN= 0
+
+[ACAL_SYS_CONSTANT]
+MAX_OFFSET_XYZ=5.0, 5.0, 5.0
+MAX_OFFSET_ANGLE=2.0
+MAX_OFFSET_JOINT=0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2
+NO_OF_MANIPULATORS=1
+MECH_SETUP_NUM=1, 1, 1, 1, 1, 1, 1, 1, 1
+LIMIT_ORIENTATION_DIFFERENCE=0.15
+INITIAL_ACCEPTANCE_AVERAGE_ERROR=1.0
+INITIAL_ACCEPTANCE_MAXIMUM_ERROR=3.0
+RECOVERY_ACCEPTANCE_AVERAGE_ERROR=0.10
+RECOVERY_ACCEPTANCE_MAXIMUM_ERROR=0.30

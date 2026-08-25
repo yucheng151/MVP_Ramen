@@ -15,12 +15,12 @@ from HMI_command import HMICommand
 from HMI_status import HMIStatus
 from HMI_plc_client import HMIPlcClient
 from HMI_ui import HMIUI
-from config import HEARTBEAT_INTERVAL, PLC_IP
+from config import HEARTBEAT_INTERVAL, PLC_IP, PLC_PORT
 
 
-def build_services(ip: str) -> tuple[HMIPlcClient, HMIHeartbeat, HMICommand, HMIStatus]:
+def build_services(ip: str, port: int = PLC_PORT) -> tuple[HMIPlcClient, HMIHeartbeat, HMICommand, HMIStatus]:
     """建立共用同一條 PLC 連線的 HMI 服務。"""
-    plc = HMIPlcClient(ip=ip)
+    plc = HMIPlcClient(ip=ip, port=port)
     return plc, HMIHeartbeat(plc), HMICommand(plc), HMIStatus(plc)
 
 
@@ -148,18 +148,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--demo", action="store_true", help="執行一次性測試流程")
     parser.add_argument("--cli", action="store_true", help="使用終端互動模式")
     parser.add_argument("--ip", default=PLC_IP, help="PLC IP 位址")
+    parser.add_argument("--port", type=int, default=PLC_PORT, help="PLC Modbus TCP 埠號")
     parser.add_argument("--mock", action="store_true", help="不連 PLC，使用模擬資料啟動 UI")
     args = parser.parse_args(argv)
 
     if args.demo:
-        plc, heartbeat, command, status = build_services(args.ip)
+        plc, heartbeat, command, status = build_services(args.ip, args.port)
         return run_demo(plc, heartbeat, command, status)
 
     if args.cli:
-        plc, heartbeat, command, status = build_services(args.ip)
+        plc, heartbeat, command, status = build_services(args.ip, args.port)
         return run_interactive(plc, heartbeat, command, status)
 
-    ui = HMIUI(ip=args.ip, mock=args.mock)
+    ui = HMIUI(ip=args.ip, port=args.port, mock=args.mock)
     ui.run()
     return 0
 

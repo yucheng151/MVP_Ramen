@@ -1,0 +1,93 @@
+Class,Identifiers,Address,Type,Initial Value,Comment
+VAR,Conveyor_Speed_WR,D108,WORD,,
+VAR,HMItoPLC_EMC,D1004.0,BOOL,,
+VAR,HMI_Robot_ActionNo,D1010,INT,,HMI Robot動作編號
+VAR,HMI_Robot_NoodleCabinetNo,D1011,INT,,HMI麵櫃編號
+VAR,HMI_Robot_CutNo,D1012,INT,,HMI麵切編號
+VAR,HMI_Robot_OutputCabinetNo,D1013,INT,,HMI出麵櫃編號
+VAR,HMItoPLC_StepMask,D1014,INT,,HMI 半自動選取 Step Bit Mask
+VAR,PLCtoHMI_EMC,D1108.0,BOOL,,
+VAR,Machine_Mode,D1109,WORD,,0=Manual、1=Semi 、10=Single bowl automatic、2=Auto
+VAR,SemiAuto_Running,D1110.5,BOOL,,半自動流程執行中
+VAR,PLCtoHMI_RobotManualStatus,D1120,INT,,Robot單動狀態
+VAR,PLCtoHMI_RobotManualAckIndex,D1121,WORD,,Robot單動命令回覆序號
+VAR,PLCtoHMI_RobotManualResultCode,D1122,INT,,Robot單動結果碼
+VAR,PLCtoHMI_RobotManualAlarmCode,D1123,INT,,Robot單動異常代碼
+VAR,PLCtoHMI_Robot_Idle,D1124.0,BOOL,,
+VAR,PLCtoIPC_RequestValid,D1203,WORD,,PLC 任務有效旗標
+VAR,IPC_CommStatus,D1209.0,BOOL,,IPC 通訊狀態；0=Offline、1=Online
+VAR,IPCtoPLC_Busy,D1302,WORD,,IPC 執行中
+VAR,Robot_Manual_ActionNo,D3080,INT,,送給Robot的動作編號
+VAR,Robot_Manual_NoodleCabinetNo,D3081,INT,,送給Robot的麵櫃編號
+VAR,Robot_Manual_CutNo,D3082,INT,,送給Robot的麵切編號
+VAR,Robot_Manual_OutputCabinetNo,D3083,INT,,送給Robot的出麵櫃編號
+VAR,Robot_Manual_NoodleTypeNo,D3084,INT,,送給Robot的麵種編號，固定為1
+VAR,Robot_Manual_Step,D3090,INT,,Robot單動流程步驟
+VAR,Robot_Manual_ParameterOK,D3091.0,BOOL,,Robot單動參數檢查結果
+VAR,Robot_Exchange_Finish,D3091.1,BOOL,,Robot交換流程完成
+VAR,Robot_Manual_StartReq,D3091.2,BOOL,,Robot單動啟動要求
+VAR,Robot_Manual_Permit,D3091.3,BOOL,,Robot手動操作允許
+VAR,Robot_Exchange_AlarmCode,D3092,INT,,Robot交換FB異常代碼
+VAR,Robot_Manual_CommandIndex,D3093,WORD,,Robot單動命令序號
+VAR,IPC_FirstMaterialPending,,BOOL,,
+VAR,Bowl_Dispenser_Cmd_Run,,BOOL,,
+VAR,IPC_CommandTrigger,,BOOL,,發送任務觸發訊號
+VAR,IPC_PreCaptureThenFirst,,BOOL,,
+VAR,IPC_CommandRecipeNo,,WORD,,準備發送的配方
+VAR,ALM_Rst,,BOOL,,
+VAR,Bowl_Dispenser_Busy,,BOOL,,
+VAR,Bowl_Dispenser_Cmd_HMItoPLC,,BOOL,,
+VAR,Conveyor_Initialize,,BOOL,,
+VAR,Conveyor_Initialize_Done,,BOOL,,
+VAR,NoodleBasket_1,,DUT_NoodleBasket,,
+VAR,Initialize_Done,,BOOL,,
+VAR,Err_HMI_CommTimeout,,BOOL,,
+VAR,IPC_CommandError,,BOOL,,IPC 任務失敗
+VAR,IPC_CommandCode,,WORD,,準備發送的任務代碼
+VAR,IPC_CommandDone,,BOOL,,IPC 任務完成脈波
+VAR,NashiRobot_Down0,,NashiRobot_Down,,
+VAR,NashiRobot_Initial_0,,NashiRobot_Initial,,
+VAR,IPC_CommandErrorCode,,WORD,,命令失敗代碼
+VAR,HMI_CMD_AckIndex_BUF,,WORD,,[PLC Internal] HMI 命令 AckIndex 暫存，給 PRG_PLCtoHMI_Status 輸出
+VAR,HMI_CMD_ResponseCode_BUF,,INT,,[PLC Internal] HMI 命令 ResponseCode 暫存，給 PRG_PLCtoHMI_Status 輸出
+VAR,Bowl_Dispenser_Cmd,,BOOL,,
+VAR,Robot_Initialize_Done,,BOOL,,
+VAR,SemiAuto_StartReq,,BOOL,,半自動啟動脈波
+VAR,RobotZoneOwner,,INT,,0：沒有人占用共用工作區
+1：生麵送入鍋動作占用
+2：煮好麵倒入碗動作占用
+3：UR1占用
+4：UR2占用
+VAR,Noodlebasket3_Down,,BOOL,,
+VAR,SemiAuto_StepMask,,WORD,,本次要執行的 Step Mask
+VAR,Noodlebasket1_Up,,BOOL,,
+VAR,Noodlebasket2_Up,,BOOL,,
+VAR,Noodlebasket2_Down,,BOOL,,
+VAR,NoodleBasket_3,,DUT_NoodleBasket,,
+VAR,Noodlebasket1_Down,,BOOL,,
+VAR,Noodlebasket3_Up,,BOOL,,
+VAR,Err_Active,,BOOL,,
+VAR,EMC,,BOOL,,
+VAR,ALM_Active,,BOOL,,
+VAR,Conveyor_Run,,BOOL,,
+VAR,EMC_Active,,BOOL,,
+VAR,NoodleBasket_2,,DUT_NoodleBasket,,
+VAR,UnitFIFO,,DUT_UnitFIFO,,
+VAR,CookTime_Soft_Set,,INT,,
+VAR,CookTime_Hard_Set,,INT,,
+VAR,CookTime_Normal_Set,,INT,,
+VAR,Robot_Idle,T0,TIMER,,
+VAR,ALM_Conveyor_Initialize_TimeOut,T1,TIMER,,
+VAR,ALM_Conveyor_Comm_TimeOut,T3,TIMER,,
+VAR,Auto_BowlArrivedSensor,,BOOL,,X0.1與模擬輸入合併
+VAR,Auto_Station20Sensor,,BOOL,,X0.2與模擬輸入合併
+VAR,Auto_Station30Sensor,,BOOL,,X0.3與模擬輸入合併
+VAR,Auto_Station40Sensor,,BOOL,,最右端注湯及出料站碗到位感測器
+VAR,Auto_BowlDropZoneFree,,BOOL,,落碗至X0.2入口路段可以接受新碗
+VAR,Auto_BowlDropRequest,,BOOL,,全自動流程要求執行落碗
+VAR,Auto_BowlDropGrant,,BOOL,,仲裁後允許執行落碗
+VAR,Auto_BowlDropStartPulse,,BOOL,,啟動既有落碗程式的單Scan脈波
+VAR,Soup_SingleCmd,,BOOL,,單次注湯啟動命令
+VAR,Soup_DonePulse,,BOOL,,注湯完成脈波，只保持一個Scan
+VAR,PLCtoHMI_OrderCompleteUnitID,D1135,DINT,,最後完成的碗編號，使用D1135至D1136
+VAR,PLCtoHMI_OrderCompleteIndex,D1137,DWORD,,訂單完成流水號

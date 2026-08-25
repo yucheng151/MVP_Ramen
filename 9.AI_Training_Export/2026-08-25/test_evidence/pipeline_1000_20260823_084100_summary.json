@@ -1,0 +1,13 @@
+{
+  "result": "PASS",
+  "failure": "",
+  "started_at": "2026-08-23T08:41:00",
+  "finished_at": "2026-08-23T13:07:22",
+  "elapsed_seconds": 15981.551,
+  "target_orders": 1000,
+  "submitted_orders": 1000,
+  "completed_orders": 1000,
+  "last_completed_unit_id": 145662000,
+  "log_file": "C:\\Users\\Administrator\\Desktop\\ITRI\\MVP_Ramen\\8.TEST_Code\\logs\\pipeline_1000_20260823_084100.log",
+  "csv_file": "C:\\Users\\Administrator\\Desktop\\ITRI\\MVP_Ramen\\8.TEST_Code\\logs\\pipeline_1000_20260823_084100.csv"
+}

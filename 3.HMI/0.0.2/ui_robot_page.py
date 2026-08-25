@@ -175,7 +175,7 @@ class RobotPage(BasePage):
             cook,
             (
                 ("麵櫃 Noodle Cabinet", tuple(str(value) for value in range(1, 11))),
-                ("麵切 Cut", tuple(str(value) for value in range(1, 7))),
+                ("麵切 Cut", tuple(str(value) for value in range(1, 4))),
                 ("出麵櫃 Output", tuple(str(value) for value in range(1, 3))),
             ),
         )
@@ -191,7 +191,7 @@ class RobotPage(BasePage):
         self._action_2_selectors = self._add_route(
             drain,
             (
-                ("麵切 Cut", tuple(str(value) for value in range(1, 7))),
+                ("麵切 Cut", tuple(str(value) for value in range(1, 4))),
             ),
         )
     def _add_route(self, parent, fields):
@@ -232,14 +232,14 @@ class RobotPage(BasePage):
                 )
                 valid_parameters = (
                     1 <= cabinet <= 10
-                    and 1 <= cut_no <= 6
+                    and 1 <= cut_no <= 3
                     and 1 <= output <= 2
                 )
             else:
                 cabinet = 0
                 cut_no = int(self._action_2_selectors[0].get())
                 output = 0
-                valid_parameters = 1 <= cut_no <= 6
+                valid_parameters = 1 <= cut_no <= 3
         except (TypeError, ValueError):
             valid_parameters = False
         if not valid_parameters:

@@ -29,7 +29,7 @@ HOTSPOTS = (
 
 
 class ModeSelectorKnob(tk.Frame):
-    """Two-position Manual/Auto selector whose state follows PLC D1109."""
+    """Three-position Manual/Semi-Auto/Auto selector following PLC D1109."""
 
     def __init__(self, parent, command):
         super().__init__(parent, width=105, height=98, bg=BG)
@@ -37,6 +37,10 @@ class ModeSelectorKnob(tk.Frame):
         asset_dir = Path(__file__).resolve().parent / "assets"
         self._manual_image = tk.PhotoImage(file=str(asset_dir / "mode_manual.png"))
         self._auto_image = tk.PhotoImage(file=str(asset_dir / "mode_auto.png"))
+        semi_source = Image.open(asset_dir / "mode_manual.png").convert("RGBA")
+        self._semi_image = ImageTk.PhotoImage(
+            semi_source.rotate(-45, resample=Image.Resampling.BICUBIC)
+        )
         self._button = tk.Button(
             self, image=self._manual_image, command=command,
             bg=BG, activebackground=BG, width=78, height=78,
@@ -52,6 +56,8 @@ class ModeSelectorKnob(tk.Frame):
     def set_mode(self, mode, switching=False):
         if mode == "Manual":
             image, text, color = self._manual_image, "MANUAL", YELLOW
+        elif mode == "Semi Auto":
+            image, text, color = self._semi_image, "SEMI AUTO", BLUE
         else:
             image, text, color = self._auto_image, "AUTO", GREEN
         self._button.configure(
@@ -281,29 +287,31 @@ class SideNavigation(tk.Frame):
             self._items.append((box, caption, value, caption_text, short_text, page_name))
 
     def refresh(self):
-        snapshot = self.app.snapshot
+        # Polling/transitional snapshots may be only partially populated.  The
+        # navigation must still refresh instead of leaving every item at "--".
+        snapshot = self.app.snapshot or {}
         arm_online = snapshot.get("arm_online")
         robot = snapshot.get("robot")
         robot_manual = snapshot.get("robot_manual")
         robot_alarm = bool(
             (
                 robot is not None
-                and robot.read_ok
+                and getattr(robot, "read_ok", False)
                 and (
-                    robot.error_signal
-                    or robot.alarm_signal
-                    or robot.estop_active
-                    or robot.error_code not in (None, 0)
+                    getattr(robot, "error_signal", False)
+                    or getattr(robot, "alarm_signal", False)
+                    or getattr(robot, "estop_active", False)
+                    or getattr(robot, "error_code", None) not in (None, 0)
                 )
             )
             or (
                 robot_manual is not None
-                and robot_manual.read_ok
+                and getattr(robot_manual, "read_ok", False)
                 and (
-                    robot_manual.alarm_code not in (None, 0)
+                    getattr(robot_manual, "alarm_code", None) not in (None, 0)
                     or (
-                        robot_manual.result_code is not None
-                        and 400 <= robot_manual.result_code <= 599
+                        getattr(robot_manual, "result_code", None) is not None
+                        and 400 <= getattr(robot_manual, "result_code") <= 599
                     )
                 )
             )
@@ -316,11 +324,11 @@ class SideNavigation(tk.Frame):
         )
         values = {
             "Home": "Main Page",
-            "System": snapshot["system"],
-            "PLC": "Online" if snapshot["online"] else "Offline",
-            "IPC": "Online" if snapshot["ipc_online"] else "Offline",
+            "System": snapshot.get("system", "Unknown"),
+            "PLC": "Online" if snapshot.get("online", False) else "Offline",
+            "IPC": "Online" if snapshot.get("ipc_online", False) else "Offline",
             "Robot": robot_state,
-            "Conveyor": snapshot["conveyor_state"],
+            "Conveyor": snapshot.get("conveyor_state", "Unknown"),
         }
         for key, value in values.items():
             color = MUTED if key == "Home" else status_color(value)
@@ -412,6 +420,12 @@ class MainPage(tk.Frame):
 
     def _draw_hotspots(self):
         self.canvas.delete("sensor_tooltip")
+        # Hotspots are recreated during live updates.  Re-evaluate the real
+        # pointer position instead of retaining a stale hover id whose widget
+        # may have been deleted before Tk can deliver <Leave>.
+        pointer_x = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
+        pointer_y = self.canvas.winfo_pointery() - self.canvas.winfo_rooty()
+        self._hovered_sensor_id = None
         left, top, width, height = self._image_box
         for hotspot in HOTSPOTS:
             x, y = left + hotspot["x"] * width, top + hotspot["y"] * height
@@ -421,16 +435,27 @@ class MainPage(tk.Frame):
             is_sensor = hotspot["id"].startswith("sensor_")
             if is_sensor:
                 color = GREEN if state == "Detected" else GRAY
-                box_w, box_h = 22, 12
+                # Sensor lamps must scale with the machine image.  Fixed pixel
+                # lamps looked oversized and visually shifted when the Auto /
+                # Semi-Auto panel reduced the overview canvas width.
+                lamp_scale = max(0.55, min(1.15, width / 850.0))
+                box_w = round(22 * lamp_scale)
+                box_h = round(12 * lamp_scale)
+                outline_width = 1 if lamp_scale < 1.0 else 2
                 self.canvas.create_rectangle(
                     x - box_w / 2, y - box_h / 2, x + box_w / 2, y + box_h / 2,
-                    fill=color, outline="#d7e3e9", width=1,
+                    fill=color, outline="#d7e3e9", width=outline_width,
                     tags=(tag, "hotspot"),
                 )
                 self.canvas.tag_bind(tag, "<Enter>",
                                      lambda _event, sensor_id=hotspot["id"]: self._show_sensor_tooltip(sensor_id))
                 self.canvas.tag_bind(tag, "<Leave>", lambda _event: self._hide_sensor_tooltip())
-                if self._hovered_sensor_id == hotspot["id"]:
+                pointer_over_sensor = (
+                    x - box_w / 2 <= pointer_x <= x + box_w / 2
+                    and y - box_h / 2 <= pointer_y <= y + box_h / 2
+                )
+                if pointer_over_sensor:
+                    self._hovered_sensor_id = hotspot["id"]
                     self._draw_sensor_tooltip(hotspot, state, x, y)
                 continue
 
@@ -571,7 +596,7 @@ class MainPage(tk.Frame):
     def refresh(self):
         self._global_controls.refresh()
         self._side_nav.refresh()
-        show_process = self.app.machine_mode == "Auto"
+        show_process = self.app.machine_mode in ("Semi Auto", "Auto")
         if show_process and not self.process_panel.winfo_ismapped():
             self.process_panel.pack(side="right", fill="y", padx=(8, 0))
             self._schedule_render()

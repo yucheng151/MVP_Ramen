@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/mvp-ramen/automation-request.schema.json",
+  "title": "PLC Automation Request",
+  "type": "object",
+  "required": ["plc", "objective", "inputs", "outputs", "safety", "acceptance_tests"],
+  "properties": {
+    "plc": {
+      "type": "object",
+      "required": ["vendor", "family", "engineering_tool", "language", "project_version"],
+      "properties": {
+        "vendor": {"const": "Delta"},
+        "family": {"type": "string"},
+        "engineering_tool": {"type": "string"},
+        "language": {"enum": ["LD", "ST", "SFC", "FBD", "IL", "mixed"]},
+        "project_version": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "objective": {"type": "string", "minLength": 1},
+    "inputs": {"type": "array", "items": {"$ref": "#/$defs/signal"}},
+    "outputs": {"type": "array", "items": {"$ref": "#/$defs/signal"}},
+    "registers": {"type": "array", "items": {"$ref": "#/$defs/signal"}},
+    "sequence": {"type": "array", "items": {"type": "string"}},
+    "timeouts_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+    "safety": {
+      "type": "object",
+      "required": ["safe_output_state", "restart_policy", "hardware_safety_boundary"],
+      "properties": {
+        "safe_output_state": {"type": "string"},
+        "restart_policy": {"type": "string"},
+        "hardware_safety_boundary": {"type": "string"}
+      }
+    },
+    "acceptance_tests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "given", "when", "then"],
+        "properties": {
+          "name": {"type": "string"},
+          "given": {"type": "string"},
+          "when": {"type": "string"},
+          "then": {"type": "string"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "signal": {
+      "type": "object",
+      "required": ["name", "address", "data_type", "direction", "source_status"],
+      "properties": {
+        "name": {"type": "string"},
+        "address": {"type": ["string", "null"]},
+        "data_type": {"type": "string"},
+        "direction": {"type": "string"},
+        "source_status": {"enum": ["verified", "candidate", "planned", "historical", "unknown"]}
+      }
+    }
+  }
+}

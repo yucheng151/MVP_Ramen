@@ -1,0 +1,27 @@
+{"id":"memory-001","type":"user_goal","content":"建立能協助撰寫台達PLC程式的AI，並讓知識可移植到其他AI平台。","status":"active"}
+{"id":"memory-002","type":"design_decision","content":"使用平台中立的Markdown、JSON、CSV、PDF、程式範例與測試資料，而非依賴聊天記憶。","status":"accepted"}
+{"id":"memory-003","type":"architecture","content":"採工程規格、知識庫、中間格式、程式生成、驗證及平台轉接的分層架構。","status":"accepted"}
+{"id":"memory-004","type":"principle","content":"專業程度主要由可重現驗證閉環決定，不由提示詞長度決定。","status":"accepted"}
+{"id":"memory-005","type":"project_fact","content":"MVP Ramen是以台達AS200 PLC為主控，整合Python HMI、手機點餐、輸送帶、Nachi Robot、IPC/Isaac Sim及雙UR5e的自動拉麵設備。","status":"verified_from_workspace"}
+{"id":"memory-006","type":"control_boundary","content":"PLC負責模式、流程、排程、安全互鎖與動作授權；HMI、IPC及Robot不得自行跳越流程。","status":"accepted"}
+{"id":"memory-007","type":"protocol","content":"IPC任務使用Code、Seq、Valid、Ack、Busy、Response及Response Seq；不得只看Done bit。","status":"verified_from_workspace"}
+{"id":"memory-008","type":"traceability","content":"每碗使用唯一UnitID，因熟成完成可能非FIFO，不得以完成先後推算訂單。","status":"accepted"}
+{"id":"memory-009","type":"version","content":"工作區最新可見PLC候選為MVP_V2_101，但是否等同現場正式運轉版仍須實機核對。","status":"candidate"}
+{"id":"memory-010","type":"version","content":"目前主要HMI版本為3.HMI/0.0.3，主要IPC整合版本為6.IPC/0.0.2。","status":"candidate"}
+{"id":"memory-011","type":"auto_contract","content":"AUTO候選位址包含D1020 UnitID、D1022 Cabinet、D1023 Firmness、D1025 Valid、D1130 ACK UnitID、D1133 FIFO Count、D1135 Done UnitID、D1137 Done Index、D8102 Station Monitor及D8114 Basket Monitor。","status":"candidate"}
+{"id":"memory-012","type":"gap","content":"AUTO的Unit Status、麵櫃及空盒庫存等部分資料區仍未完整配置。","status":"planned"}
+{"id":"memory-013","type":"test_strategy","content":"分層測試包含Python參考模型、虛擬Modbus PLC、AS200 Simulator、周邊模擬與實體/HIL。","status":"accepted"}
+{"id":"memory-014","type":"test_asset","content":"測試程式已涵蓋單碗全流程、多訂單、多站流水線、FIFO復歸及1000筆耐久。程式存在不等於最近一次結果必然通過。","status":"verified_from_workspace"}
+{"id":"memory-015","type":"research","content":"研究主題定位為基於數位分身與分層測試架構的PLC多設備自動化系統整合驗證，以自動拉麵機為案例。","status":"proposed"}
+{"id":"memory-016","type":"research_question","content":"評估分層模擬能否提前發現整合缺陷、UnitID與Seq能否降低錯配/重複動作、故障注入能否提升異常流程可驗證性。","status":"proposed"}
+{"id":"memory-017","type":"safety","content":"AI產生的PLC程式不得直接下載至運轉設備；必須經編譯、Simulator、故障注入、I/O、低速單步及FAT。","status":"mandatory"}
+{"id":"memory-018","type":"safety","content":"Modbus EMC、心跳與軟體停止不能取代硬體急停、安全繼電器或安全PLC。","status":"mandatory"}
+{"id":"memory-019","type":"data_boundary","content":"本匯出只包含目前聊天串可見內容與工作區資料，不含其他聊天、平台隱藏記憶、系統提示、內部推理或模型權重。","status":"mandatory"}
+{"id":"memory-020","type":"next_action","content":"後續需核對V2_101實機版本、保存最新測試log、完成AUTO契約、點餐API、HIL/FAT及研究量化結果。","status":"open"}
+{"id":"memory-021","type":"priority_memory","content":"使用者特別要求完整保存自建點餐系統規劃與PLC全自動控制設計；接手AI應優先讀取ordering_plc_design_memory.md。","status":"mandatory"}
+{"id":"memory-022","type":"ordering_architecture","content":"手機送出商業訂單，HMI驗證並將quantity拆成多個唯一UnitID；PLC負責FIFO、三麵篩、四站、Nachi/UR授權及完成回報。","status":"accepted"}
+{"id":"memory-023","type":"ordering_protocol","content":"AUTO收單使用D1020 UnitID、D1022 Cabinet、D1023 Firmness、D1024 Index、D1025 Valid；PLC回D1130 ACK UnitID、D1132 ACK Index、D1133 FIFO Count、D1134 Response、D1135 Completed UnitID及D1137 Completion Index。","status":"candidate"}
+{"id":"memory-024","type":"ordering_completion","content":"HMI只在Completion Index为新值且Completed UnitID匹配时完成对应单碗、扣正确麵櫃库存，并在原商业订单全部Unit完成后通知顾客。","status":"design_decision"}
+{"id":"memory-025","type":"priority_memory","content":"使用者強調PLC程式邏輯非常重要；後續AI必須優先保存與遵守plc_control_logic_memory.md中的狀態機、資源仲裁、不變條件、timeout、EMC及復歸規則。","status":"mandatory"}
+{"id":"memory-026","type":"priority_memory","content":"使用者要求保存台達PLC語法、ISPSoft使用方式與錯誤排查流程；後續AI必須讀取delta_plc_syntax_usage_debugging.md，未知台達專用指令不得臆造。","status":"mandatory"}
+{"id":"memory-027","type":"source_archive","content":"已找到並匯出Codex聊天串「規劃自建點餐系統」Thread 01a0128c-710d-7be2-9e8d-3e60d4f5b5d0，共41頁、403 turns、1313則可見訊息，位於conversation_exports/ordering_system_thread。","status":"verified"}

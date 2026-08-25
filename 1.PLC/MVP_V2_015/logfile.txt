@@ -1,0 +1,1 @@
+1|***|2026-07-22 10:09:55.5259|***|9012|***|1|***|INFO|***|HWCONFIG.Form_Main.SaveUserProject|***|專案存檔成功。\r\n專案目錄：C:\Users\User\Desktop\ITRI\MVP_Ramen\1.PLC\MVP_V2_015 

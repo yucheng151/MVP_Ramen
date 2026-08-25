@@ -9,7 +9,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import messagebox
 
-from config import HEARTBEAT_INTERVAL, PLC_IP, RECONNECT_DELAY
+from config import HEARTBEAT_INTERVAL, PLC_IP, PLC_PORT, RECONNECT_DELAY
 from HMI_command import HMICommand
 from HMI_heartbeat import HMIHeartbeat
 from HMI_ipc_heartbeat import IPCHeartbeat
@@ -31,6 +31,7 @@ from register_map import (
     PLC_MACHINE_MODE,
     PLC_MAIN_PROCESS_STEP,
     MACHINE_MODE_MANUAL,
+    MACHINE_MODE_SEMI_AUTO,
     MACHINE_MODE_AUTO,
 )
 from ui_common import BG
@@ -45,18 +46,20 @@ PLC_STARTUP_GRACE_SECONDS = 8.0
 MODE_COMMAND_TIMEOUT_SECONDS = 8.0
 MODE_VALUE_TO_TEXT = {
     MACHINE_MODE_MANUAL: "Manual",
+    MACHINE_MODE_SEMI_AUTO: "Semi Auto",
     MACHINE_MODE_AUTO: "Auto",
 }
 MODE_TEXT_TO_VALUE = {text: value for value, text in MODE_VALUE_TO_TEXT.items()}
 MODE_SUCCESS_RESPONSE = {
     MACHINE_MODE_MANUAL: 300,
-    MACHINE_MODE_AUTO: 301,
+    MACHINE_MODE_SEMI_AUTO: 301,
+    MACHINE_MODE_AUTO: 302,
 }
 LOGGER = logging.getLogger(__name__)
 
 
 class HMIUI:
-    def __init__(self, ip: str = PLC_IP, mock: bool = False) -> None:
+    def __init__(self, ip: str = PLC_IP, port: int = PLC_PORT, mock: bool = False) -> None:
         self.root = tk.Tk()
         self.root.title("MVP 拉麵機 HMI" + (" [MOCK]" if mock else ""))
         self.root.geometry("1366x768")
@@ -66,7 +69,7 @@ class HMIUI:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.mock_mode = mock
 
-        self.plc = MockHMIPlcClient(ip="MOCK") if mock else HMIPlcClient(ip=ip)
+        self.plc = MockHMIPlcClient(ip="MOCK") if mock else HMIPlcClient(ip=ip, port=port)
         self.heartbeat = HMIHeartbeat(self.plc)
         self.ipc_heartbeat = IPCHeartbeat(self.plc)
         self.command = HMICommand(self.plc)
@@ -201,9 +204,12 @@ class HMIUI:
                 "robot": None,
                 "robot_manual": None,
                 "bowl_dispenser_busy": False,
+                "semi_auto_running": False,
+                "sensor_status_word": 0,
                 "sensors": {"bowl_drop_confirm": False, "pause_point_1": False,
                             "pause_point_2": False, "right_stop_point": False,
-                            "bowl_dispenser_busy": False}}
+                            "bowl_dispenser_busy": False,
+                            "semi_auto_running": False}}
 
     def show_page(self, name: str) -> None:
         # Keep the outer window exactly the same size while pages with different
@@ -322,18 +328,16 @@ class HMIUI:
         with self._mode_lock:
             if self.mode_change_pending_index is not None:
                 return False
-            process = self.snapshot.get("process")
-            if process is not None and process.status == PROCESS_RUNNING:
-                self._mode_notice = ("warning", "流程執行中，無法切換模式")
-                return False
-            with self._manual_action_lock:
-                if self.manual_action_owner is not None:
-                    self._mode_notice = (
-                        "warning", "手動動作尚未完成，無法切換模式",
-                    )
-                    return False
             if not self.snapshot.get("online", False) or not self.plc.connected:
                 self._mode_notice = ("error", "PLC 通訊中斷，無法切換模式")
+                return False
+            # D1110.5 is the sole PLC condition allowed to block a mode
+            # change during Semi-Auto. Main Step, alarms and other PLC bits
+            # are display-only for this decision.
+            if self.snapshot.get("semi_auto_running", False):
+                self._mode_notice = (
+                    "warning", "Semi-Auto is running (D1110.5 ON).",
+                )
                 return False
             if mode == self._last_valid_machine_mode:
                 return True
@@ -396,8 +400,15 @@ class HMIUI:
         with self._mode_lock:
             if self.mode_change_pending_index is not None:
                 return
-        target = MACHINE_MODE_AUTO if self.machine_mode == "Manual" else MACHINE_MODE_MANUAL
-        self.request_machine_mode(target)
+        modes = ("Manual", "Semi Auto", "Auto")
+        current = modes.index(self.machine_mode) if self.machine_mode in modes else 0
+        if current == 0:
+            self._mode_step_direction = 1
+        elif current == len(modes) - 1:
+            self._mode_step_direction = -1
+        self.request_machine_mode(
+            MODE_TEXT_TO_VALUE[modes[current + self._mode_step_direction]]
+        )
 
     def _finish_mode_change(self, notice: tuple[str, str] | None = None) -> None:
         self.command.clear_machine_mode_command()
@@ -410,10 +421,12 @@ class HMIUI:
 
     def _update_machine_mode(self, raw_mode: int) -> str:
         if raw_mode in MODE_VALUE_TO_TEXT:
-            self._last_valid_machine_mode = raw_mode
-            self.machine_mode = MODE_VALUE_TO_TEXT[raw_mode]
-            if raw_mode != MACHINE_MODE_MANUAL:
-                self.conveyor_run_requested = None
+            # A matched mode ACK/response is authoritative on the current PLC
+            # build because D1109 is not following Machine_Mode yet.  Keep the
+            # last PLC-confirmed command result instead of immediately being
+            # pulled back by stale D1109 data.
+            if self.mode_change_pending_index is None:
+                return ""
             return ""
         error = f"Invalid PLC Machine_Mode D1109 value: {raw_mode}"
         LOGGER.warning(error)
@@ -433,9 +446,6 @@ class HMIUI:
                     ))
                     return
                 if response_code == MODE_SUCCESS_RESPONSE[target]:
-                    # The PLC currently does not publish mode through D1109.
-                    # A matched ACK plus response 300/301 is the authoritative
-                    # completion signal for Manual/Auto selection.
                     self._last_valid_machine_mode = target
                     self.machine_mode = MODE_VALUE_TO_TEXT[target]
                     if target != MACHINE_MODE_MANUAL:
@@ -488,19 +498,19 @@ class HMIUI:
             plc_status = self.status.read_status()
             timeout_data = self.plc.read_d(CONVEYOR_TIMEOUT_WORD, 1)
             emc_data = self.plc.read_d(PLC_EMC_STATUS_WORD, 1)
+            mode_data = self.plc.read_d(PLC_MACHINE_MODE, 1)
             process_step_data = (
                 [0] if self.mock_mode else self.plc.read_d(PLC_MAIN_PROCESS_STEP, 1)
             )
             if (conveyor is None or timeout_data is None or emc_data is None
+                    or mode_data is None
                     or process_step_data is None):
                 if self._startup_grace_active():
                     self._publish_connecting()
                 else:
                     self._publish_offline()
             else:
-                # D1109 is currently not implemented by the PLC.  Mode is
-                # updated only by a matched mode-command ACK/response.
-                machine_mode_error = ""
+                machine_mode_error = self._update_machine_mode(mode_data[0])
                 self._handle_mode_reply(
                     plc_status.ack_index if plc_status.ok else None,
                     plc_status.response_code if plc_status.ok else None,
@@ -536,12 +546,6 @@ class HMIUI:
                     valid_steps = {step for step, _name in PROCESS_STEPS}
                     if raw_step in valid_steps:
                         self._last_valid_process_step = raw_step
-                    else:
-                        LOGGER.warning(
-                            "Invalid PLC Main Process Step D1400 value: %s; "
-                            "keeping %s",
-                            raw_step, self._last_valid_process_step,
-                        )
                     process.step = self._last_valid_process_step
                     process.mapping_ready = True
                     if process.step == 0:
@@ -640,12 +644,15 @@ class HMIUI:
                     "robot": robot,
                     "robot_manual": plc_status.robot_manual,
                     "bowl_dispenser_busy": plc_status.sensors.bowl_dispenser_busy,
+                    "semi_auto_running": plc_status.sensors.semi_auto_running,
+                    "sensor_status_word": plc_status.sensors.raw_word,
                     "sensors": {
                         "bowl_drop_confirm": plc_status.sensors.bowl_drop_confirm,
                         "pause_point_1": plc_status.sensors.pause_point_1,
                         "pause_point_2": plc_status.sensors.pause_point_2,
                         "right_stop_point": plc_status.sensors.right_stop_point,
                         "bowl_dispenser_busy": plc_status.sensors.bowl_dispenser_busy,
+                        "semi_auto_running": plc_status.sensors.semi_auto_running,
                     },
                     "system": "Alarm" if self.active_alarms else "Normal",
                 }
@@ -709,9 +716,12 @@ class HMIUI:
                          "hmi_emc_requested": self.hmi_emc_requested,
                          "alarm_condition_active": True,
                          "bowl_dispenser_busy": False,
+                         "semi_auto_running": False,
+                         "sensor_status_word": 0,
                          "sensors": {"bowl_drop_confirm": False, "pause_point_1": False,
                                      "pause_point_2": False, "right_stop_point": False,
-                                     "bowl_dispenser_busy": False},
+                                     "bowl_dispenser_busy": False,
+                                     "semi_auto_running": False},
                          "conveyor_state": "Unknown", "system": "Alarm"}
         self._update_alarms(["PLC Communication Timeout", "Conveyor Driver Offline"])
 
@@ -764,20 +774,38 @@ class HMIUI:
     def _refresh_ui(self) -> None:
         if self._stop_event.is_set():
             return
-        page = self.pages[self.current_page]
-        if hasattr(page, "update_global_status"):
-            page.update_global_status()
-        page.refresh()
-        with self._mode_lock:
-            notice = self._mode_notice
-            self._mode_notice = None
-        if notice is not None:
-            level, text = notice
-            if level == "warning":
-                messagebox.showwarning("MODE", text, parent=self.root)
-            else:
-                messagebox.showerror("MODE", text, parent=self.root)
-        self.root.after(400, self._refresh_ui)
+        try:
+            page = self.pages[self.current_page]
+            # Refresh the shared header/navigation and the visible page from the
+            # same latest PLC snapshot on every UI cycle.
+            if hasattr(page, "update_global_status"):
+                page.update_global_status()
+            page.refresh()
+            if getattr(self, "_last_ui_refresh_error", None) is not None:
+                LOGGER.info("UI refresh recovered on %s", self.current_page)
+                self._last_ui_refresh_error = None
+        except Exception as exc:
+            # A widget/page error must never kill Tk's repeating refresh loop.
+            # Log only when the error changes to avoid flooding hmi.log.
+            error_key = (self.current_page, type(exc).__name__, str(exc))
+            if getattr(self, "_last_ui_refresh_error", None) != error_key:
+                LOGGER.exception("UI refresh failed on %s", self.current_page)
+                self._last_ui_refresh_error = error_key
+
+        try:
+            with self._mode_lock:
+                notice = self._mode_notice
+                self._mode_notice = None
+            if notice is not None:
+                level, text = notice
+                if level == "warning":
+                    messagebox.showwarning("MODE", text, parent=self.root)
+                else:
+                    messagebox.showerror("MODE", text, parent=self.root)
+        finally:
+            # Always schedule the next cycle, including after a page exception.
+            if not self._stop_event.is_set():
+                self.root.after(400, self._refresh_ui)
 
     def on_close(self) -> None:
         if self.plc.connected:

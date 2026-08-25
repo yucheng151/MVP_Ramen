@@ -1,0 +1,52 @@
+; Copyright(c) 2001 NACHI-Fujikoshi corporation. All Rights Reserved.
+;------------------------------------------------------------------------
+[APP_HEADER]
+FILENAME=
+VER= 1.00.00
+DATE= 12/25/2001
+EMESS= This is the default file for an application(Appcons).
+JMESS= アプリケーション用管理初期値ファイルです。
+
+[APP_SPOT]
+CONSTANT=
+CONDITION=
+
+[APP_MATEHAN]
+CONSTANT=
+CONDITION=
+
+[APP_ARC]
+CONSTANT=
+CONDITION=
+
+[APP_BRASTER]
+CONSTANT=
+CONDITION=
+
+[APP_SEAL]
+CONSTANT=
+CONDITION=
+
+[APP_PAINT]
+CONSTANT=
+CONDITION=
+
+[APP_TRANSFER]
+CONSTANT=
+CONDITION=
+
+[APP_FHAND]
+CONSTANT=
+CONDITION=
+
+[APP_PLTZ]
+CONSTANT=Ac01Pltz.CON
+CONDITION=
+
+[APP_ROLHEM]
+CONSTANT=
+CONDITION=
+
+[APP_LASER]
+CONSTANT=
+CONDITION=

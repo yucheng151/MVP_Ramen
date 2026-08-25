@@ -23,6 +23,18 @@ HMI_ROBOT_ACTION_NO = 1010
 HMI_ROBOT_NOODLE_CABINET_NO = 1011
 HMI_ROBOT_CUT_NO = 1012
 HMI_ROBOT_OUTPUT_CABINET_NO = 1013
+HMI_TEST_STEP_MASK = 1014
+SEMI_AUTO_TEST_STEP_BITS = {
+    10: 0,  # Cook noodles + dispense bowl
+    20: 1,  # Conveyor to pause point 1
+    30: 2,  # Place noodles
+    40: 3,  # First three materials
+    50: 4,  # Conveyor to pause point 2
+    60: 5,  # Last three materials
+    70: 6,  # Conveyor to stop point
+    80: 7,  # Add soup
+}
+SEMI_AUTO_TEST_MASK_ALL = 0x00FF
 HMI_HEARTBEAT_RETURN_INDEX = 1005
 PLC_HEARTBEAT_INDEX = 1100
 PLC_CMD_ACK_INDEX = 1102
@@ -37,13 +49,13 @@ PLC_MACHINE_MODE = 1109
 PLC_MAIN_PROCESS_STEP = 1400
 
 MACHINE_MODE_MANUAL = 0
-MACHINE_MODE_AUTO = 1
-# Legacy aliases retained only so older modules can import; no Semi-Auto UI exists.
-MACHINE_MODE_SEMI_AUTO = MACHINE_MODE_AUTO
+MACHINE_MODE_SEMI_AUTO = 1
+MACHINE_MODE_AUTO = 2
 
 CMD_MODE_MANUAL = 30
-CMD_MODE_AUTO = 31
-CMD_MODE_SEMI_AUTO = CMD_MODE_AUTO
+CMD_MODE_SEMI_AUTO = 31
+CMD_MODE_AUTO = 32
+CMD_SEMI_AUTO_SINGLE = 60
 CMD_SMALL_MATERIAL_FIRST = 50
 CMD_SMALL_MATERIAL_LAST = 51
 PLC_TO_HMI_SENSOR_STATUS = 1110
@@ -128,6 +140,7 @@ SENSOR_BITS = {
     "pause_point_2": 2,
     "right_stop_point": 3,
     "bowl_dispenser_busy": 4,
+    "semi_auto_running": 5,
 }
 
 FAULT_NAMES = (
