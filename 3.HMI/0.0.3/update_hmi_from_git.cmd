@@ -12,7 +12,7 @@ if errorlevel 1 (
 for /f "delims=" %%R in ('git rev-parse --show-toplevel 2^>nul') do set "REPO_ROOT=%%R"
 if not defined REPO_ROOT (
     echo [ERROR] This HMI folder was not installed with git clone.
-    echo Clone the repository once, then run this file from 3.HMI\0.0.3.
+    echo Clone the HMI 0.0.3 repository once, then run this file from that folder.
     pause
     exit /b 1
 )

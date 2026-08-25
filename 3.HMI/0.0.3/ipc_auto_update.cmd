@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 set "GIT=C:\Program Files\Git\cmd\git.exe"
 set "LOG=%~dp0logs\ipc_auto_update.log"
-set "REMOTE=https://github.com/yucheng151/MVP_Ramen.git"
+set "REMOTE=https://github.com/yucheng151/MVP_Ramen_HMI_0.0.3.git"
 
 if not exist "%~dp0logs" mkdir "%~dp0logs"
 
