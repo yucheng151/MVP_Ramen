@@ -57,13 +57,23 @@ def join_dint(words: list[int]) -> int:
 
 
 class OrderIntegrationTest:
-    def __init__(self) -> None:
-        self.raw = ModbusTcpClient(HOST, port=PORT, timeout=1.0)
-        self.peripheral_raw = ModbusTcpClient(HOST, port=PORT, timeout=1.0)
+    def __init__(
+        self,
+        host: str = HOST,
+        port: int = PORT,
+        device_id: int = DEVICE_ID,
+    ) -> None:
+        self.host = str(host)
+        self.port = int(port)
+        self.device_id = int(device_id)
+        self.raw = ModbusTcpClient(self.host, port=self.port, timeout=1.0)
+        self.peripheral_raw = ModbusTcpClient(
+            self.host, port=self.port, timeout=1.0,
+        )
         self.hmi = HMIPlcClient(
-            ip=HOST,
-            port=PORT,
-            slave_id=DEVICE_ID,
+            ip=self.host,
+            port=self.port,
+            slave_id=self.device_id,
             timeout=1.0,
         )
         self.heartbeat = HMIHeartbeat(self.hmi)
@@ -75,7 +85,7 @@ class OrderIntegrationTest:
         result = self.raw.read_holding_registers(
             address=address,
             count=count,
-            device_id=DEVICE_ID,
+            device_id=self.device_id,
         )
         if result.isError():
             raise ConnectionError(f"read D{address}: {result}")
@@ -85,7 +95,7 @@ class OrderIntegrationTest:
         result = self.raw.write_register(
             address=address,
             value=int(value) & 0xFFFF,
-            device_id=DEVICE_ID,
+            device_id=self.device_id,
         )
         if result.isError():
             raise ConnectionError(f"write D{address}: {result}")
@@ -94,7 +104,7 @@ class OrderIntegrationTest:
         result = self.raw.write_registers(
             address=address,
             values=[int(value) & 0xFFFF for value in values],
-            device_id=DEVICE_ID,
+            device_id=self.device_id,
         )
         if result.isError():
             raise ConnectionError(f"write D{address} block: {result}")
@@ -103,7 +113,7 @@ class OrderIntegrationTest:
         result = self.raw.read_coils(
             address=MODBUS_Y0_BASE + bit_no,
             count=1,
-            device_id=DEVICE_ID,
+            device_id=self.device_id,
         )
         if result.isError():
             raise ConnectionError(f"read Y0.{bit_no}: {result}")
@@ -148,7 +158,7 @@ class OrderIntegrationTest:
             raise ConnectionError("Peripheral simulator cannot connect")
         self.peripheral = AS200PeripheralSimulator(
             client=self.peripheral_raw,
-            device_id=DEVICE_ID,
+            device_id=self.device_id,
             ipc_delay=0.5,
             nachi_accept_delay=0.15,
             nachi_action_delay=0.8,

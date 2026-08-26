@@ -100,7 +100,12 @@ class EnduranceLogger:
 
 
 class ThousandOrderEnduranceTest(PipelineStressTest):
-    def submit_order_quiet(self, unit_id: int) -> tuple[bool, int]:
+    def submit_order_quiet(
+        self,
+        unit_id: int,
+        cabinet_no: int = 1,
+        firmness_no: int = 2,
+    ) -> tuple[bool, int]:
         before_count = self.read_d(D_ORDER_FIFO_COUNT)[0]
         old_input_index = self.read_d(D_ORDER_INDEX)[0]
         old_ack_index = self.read_d(D_ORDER_ACK_INDEX)[0]
@@ -109,7 +114,7 @@ class ThousandOrderEnduranceTest(PipelineStressTest):
         self.write_d(D_ORDER_VALID, 0)
         self.write_block(
             D_ORDER_UNIT_ID,
-            split_dint(unit_id) + [1, 2, order_index],
+            split_dint(unit_id) + [cabinet_no, firmness_no, order_index],
         )
         self.write_d(D_ORDER_VALID, 1)
         acknowledged = self.wait_for(
@@ -134,6 +139,8 @@ class ThousandOrderEnduranceTest(PipelineStressTest):
         queue_window: int,
         log_dir: Path,
         live_state_path: Path | None = None,
+        cabinet_no: int = 1,
+        firmness_no: int = 2,
     ) -> int:
         recorder = EnduranceLogger(log_dir, total_orders)
         print(f"LOG_FILE={recorder.log_path}", flush=True)
@@ -213,6 +220,10 @@ class ThousandOrderEnduranceTest(PipelineStressTest):
             recorder.event("FAIL queue_window必须为3到31", True)
             recorder.close()
             return 2
+        if not 1 <= cabinet_no <= 10 or firmness_no not in (1, 2, 3):
+            recorder.event("FAIL 麵櫃或軟硬度設定無效", True)
+            recorder.close()
+            return 2
         if not self.raw.connect() or not self.hmi.connect():
             recorder.event("FAIL 无法连接AS200 Simulator", True)
             recorder.close()
@@ -229,7 +240,10 @@ class ThousandOrderEnduranceTest(PipelineStressTest):
                 raise RuntimeError(failure)
 
             self.last_accepted_ipc_response_seq = self.read_d(1303, 2)[1]
-            self.write_d(D_SIMULATION, 1 << BIT_SIM_MODE)
+            self.write_d(
+                D_SIMULATION,
+                (original_simulation_word & ~0x001F) | (1 << BIT_SIM_MODE),
+            )
             self.clear_station_inputs()
 
             initialized = self.wait_for(
@@ -271,7 +285,9 @@ class ThousandOrderEnduranceTest(PipelineStressTest):
             initial_submit = min(queue_window, total_orders)
             for _ in range(initial_submit):
                 unit_id = unit_ids[submitted_count]
-                ok, response = self.submit_order_quiet(unit_id)
+                ok, response = self.submit_order_quiet(
+                    unit_id, cabinet_no, firmness_no,
+                )
                 if not ok:
                     raise RuntimeError(
                         f"初始送单失败 UnitID={unit_id} Response={response}"
@@ -378,7 +394,9 @@ class ThousandOrderEnduranceTest(PipelineStressTest):
 
                     if submitted_count < total_orders:
                         next_submit_id = unit_ids[submitted_count]
-                        ok, response = self.submit_order_quiet(next_submit_id)
+                        ok, response = self.submit_order_quiet(
+                            next_submit_id, cabinet_no, firmness_no,
+                        )
                         if not ok:
                             raise RuntimeError(
                                 f"滚动补单失败 UnitID={next_submit_id} "
@@ -490,6 +508,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--orders", type=int, default=1000)
     parser.add_argument("--queue-window", type=int, default=16)
     parser.add_argument("--live-state", type=Path, default=None)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=10002)
+    parser.add_argument("--device-id", type=int, default=1)
+    parser.add_argument("--cabinet", type=int, default=1)
+    parser.add_argument("--firmness", type=int, default=2)
     parser.add_argument(
         "--log-dir",
         type=Path,
@@ -501,10 +524,16 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     raise SystemExit(
-        ThousandOrderEnduranceTest().run_endurance(
+        ThousandOrderEnduranceTest(
+            host=args.host,
+            port=args.port,
+            device_id=args.device_id,
+        ).run_endurance(
             total_orders=args.orders,
             queue_window=args.queue_window,
             log_dir=args.log_dir,
             live_state_path=args.live_state,
+            cabinet_no=args.cabinet,
+            firmness_no=args.firmness,
         )
     )
